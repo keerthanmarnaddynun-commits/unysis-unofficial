@@ -1,0 +1,9 @@
+2026-04-24 15:23:31,442 INFO Starting training pipeline...
+2026-04-24 15:23:31,444 ERROR No metadata file found in data/metadata/
+2026-04-24 15:31:55,621 INFO Starting training pipeline...
+2026-04-24 15:31:55,630 INFO Loaded 20 training samples and 5 validation samples.
+2026-04-24 15:31:55,672 INFO Computed class weights: tensor([1., 1.])
+2026-04-24 15:32:15,874 INFO Epoch 1 - Training Loss: 0.6077
+2026-04-24 15:32:22,241 INFO Epoch 1 - Validation Loss: 0.4840
+2026-04-24 15:32:22,241 INFO Epoch 1 - Metrics: {'accuracy': 1.0, 'precision': 0.0, 'recall': 0.0, 'f1': 0.0}
+2026-04-24 15:32:22,241 INFO New best validation accuracy: 1.0000

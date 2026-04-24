@@ -1,0 +1,36 @@
+# ======================
+# FRONTEND (Next.js)
+# ======================
+node_modules/
+.next/
+.vercel/
+.snowflake/
+.v0-trash/
+next.user-config.*
+__v0_*
+
+# ======================
+# BACKEND (Python)
+# ======================
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# ======================
+# ENV FILES
+# ======================
+.env
+.env*.local
+
+# ======================
+# OS FILES
+# ======================
+.DS_Store
+Thumbs.db
+
+# ======================
+# BUILD / MISC
+# ======================
+dist/
+build/
