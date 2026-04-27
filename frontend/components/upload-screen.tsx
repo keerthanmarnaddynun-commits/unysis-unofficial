@@ -18,6 +18,7 @@ export interface SourceInfo {
 
 interface UploadScreenProps {
   mode: "file" | "url"
+  initialUrl?: string
   onBack: () => void
   onAnalyze: (sourceInfo: SourceInfo) => void
 }
@@ -28,10 +29,10 @@ type ProcessingStep = {
   completed: boolean
 }
 
-export function UploadScreen({ mode, onBack, onAnalyze }: UploadScreenProps) {
+export function UploadScreen({ mode, initialUrl = "", onBack, onAnalyze }: UploadScreenProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [file, setFile] = useState<File | null>(null)
-  const [url, setUrl] = useState("")
+  const [url, setUrl] = useState(initialUrl)
   const [simulateSafeContent, setSimulateSafeContent] = useState(false)
   const [showSafeResult, setShowSafeResult] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -403,6 +404,12 @@ export function UploadScreen({ mode, onBack, onAnalyze }: UploadScreenProps) {
                 ) : (
                   <>
                     <div className="space-y-4">
+                      {initialUrl && (
+                        <div className="flex items-center gap-2 text-sm text-primary bg-primary/10 p-2 rounded-md border border-primary/20 animate-in fade-in duration-200">
+                          <Link className="w-4 h-4" />
+                          <span className="font-medium">URL received from external platform</span>
+                        </div>
+                      )}
                       <div className="flex gap-3">
                         <div className="flex-1 relative">
                           <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -416,7 +423,7 @@ export function UploadScreen({ mode, onBack, onAnalyze }: UploadScreenProps) {
                         </div>
                       </div>
 
-                      {url && (
+                      {url && !initialUrl && (
                         <div className="flex items-center gap-2 text-sm text-verdict-real animate-in fade-in duration-200">
                           <CheckCircle className="w-4 h-4" />
                           <span>URL-based submission enables automatic source verification</span>
