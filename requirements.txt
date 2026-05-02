@@ -1,0 +1,17 @@
+flask
+flask-cors
+fastapi
+uvicorn
+python-multipart
+
+torch
+torchvision
+opencv-python
+pillow
+numpy
+pandas
+scikit-learn
+tqdm
+
+efficientnet-pytorch
+facenet-pytorch

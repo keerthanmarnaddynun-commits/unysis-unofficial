@@ -10,27 +10,124 @@ next.user-config.*
 __v0_*
 
 # ======================
-# BACKEND (Python)
+# PYTHON / BACKEND
 # ======================
-venv/
-.venv/
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.Python
+*.so
+.python-version
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.conda/
+conda-env/
+
+# Packaging / build
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Tool caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.pyre/
+.tox/
+.nox/
+.hypothesis/
+.cache/
+
+# Type checker / notebook artifacts
+.ipynb_checkpoints/
 
 # ======================
-# ENV FILES
+# ML ARTIFACTS / DATA
+# ======================
+# Model weights and serialized artifacts
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.safetensors
+*.onnx
+*.h5
+*.joblib
+*.pkl
+
+# Large datasets / processed outputs
+data/
+datasets/
+dataset_raw/
+artifacts/
+outputs/
+processed/
+processed_data/
+ml_pipeline/processed_data/
+checkpoints/
+ml_pipeline/models/checkpoints/
+
+# Media and heavy files in backend/ML areas
+backend/**/*.mp4
+backend/**/*.mov
+backend/**/*.avi
+backend/**/*.mkv
+backend/**/*.webm
+backend/**/*.gif
+backend/**/*.tiff
+backend/**/*.bmp
+backend/**/*.webp
+backend/**/*.jpg
+backend/**/*.jpeg
+backend/**/*.png
+ml_pipeline/**/*.mp4
+ml_pipeline/**/*.mov
+ml_pipeline/**/*.avi
+ml_pipeline/**/*.mkv
+ml_pipeline/**/*.webm
+
+# ======================
+# LOGS / TEMP
+# ======================
+*.log
+logs/
+*.tmp
+*.temp
+*.pid
+*.out
+*.err
+tmp/
+temp/
+
+# ======================
+# ENV / SECRETS
 # ======================
 .env
-.env*.local
+.env.*
+!.env.example
+!.env.template
 
 # ======================
-# OS FILES
+# OS / EDITOR
 # ======================
 .DS_Store
 Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 
 # ======================
-# BUILD / MISC
+# DATA
 # ======================
-dist/
-build/
+
+base_deepfake/
+processed_data/
+ml_pipeline/processed_data/
+test_images/
+test_images_clean/
+backend/uploads/
