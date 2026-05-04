@@ -7,3 +7,25 @@
 2026-04-24 15:32:22,241 INFO Epoch 1 - Validation Loss: 0.4840
 2026-04-24 15:32:22,241 INFO Epoch 1 - Metrics: {'accuracy': 1.0, 'precision': 0.0, 'recall': 0.0, 'f1': 0.0}
 2026-04-24 15:32:22,241 INFO New best validation accuracy: 1.0000
+2026-04-27 16:12:34,004 INFO Starting training pipeline...
+2026-04-27 16:12:34,023 INFO Loaded dataset sizes - train: 2808, val: 602, test: 604
+2026-04-27 16:12:34,048 INFO Computed class weights: tensor([1., 1.])
+2026-04-27 16:13:24,885 INFO Starting training pipeline...
+2026-04-27 16:13:24,952 INFO Loaded dataset sizes - train: 2808, val: 602, test: 604
+2026-04-27 16:13:24,956 INFO Computed class weights: tensor([1., 1.])
+2026-04-27 16:14:09,215 INFO Epoch 1 - Training Loss: 0.0161
+2026-04-27 16:14:45,884 INFO Epoch 1 - Validation Loss: 0.0655
+2026-04-27 16:14:45,885 INFO Epoch 1 - Metrics: {'accuracy': 0.828125, 'precision': 0.0, 'recall': 0.0, 'f1': 0.0}
+2026-04-27 16:14:45,885 INFO New best validation accuracy: 0.8281
+2026-04-27 16:15:49,517 INFO Final Test Metrics: {'accuracy': 0.4586092715231788, 'precision': 0.4015748031496063, 'recall': 0.16887417218543047, 'f1': 0.23776223776223776}
+2026-04-27 16:15:49,833 INFO Saved final model to D:\forsen\ml_pipeline\models\model.pth
+2026-04-27 16:23:46,291 INFO Starting training pipeline...
+2026-04-27 16:23:46,325 INFO Loaded dataset sizes - train: 2808, val: 602, test: 604
+2026-04-27 16:23:46,325 INFO Computed class weights: tensor([1., 1.])
+2026-04-27 16:24:31,580 INFO Epoch 1 - Training Loss: 0.0165
+2026-04-27 16:24:59,613 INFO Epoch 1 - Validation Loss: 0.0610
+2026-04-27 16:24:59,614 INFO Epoch 1 - Metrics: {'accuracy': 0.90625, 'precision': 0.0, 'recall': 0.0, 'f1': 0.0}
+2026-04-27 16:24:59,614 INFO Epoch 1 - Accuracy train: 0.4375 | val: 0.9062
+2026-04-27 16:24:59,614 INFO New best validation accuracy: 0.9062
+2026-04-27 16:25:57,976 INFO Final Test Metrics: {'accuracy': 0.4768211920529801, 'precision': 0.4351851851851852, 'recall': 0.15562913907284767, 'f1': 0.22926829268292684}
+2026-04-27 16:25:58,310 INFO Saved final model to D:\forsen\ml_pipeline\models\model.pth
