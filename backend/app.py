@@ -153,8 +153,17 @@ def predict_image():
     file_path = None
     try:
         file_path = _save_upload_to_temp(file)
+        
+        print("🔥 Request received")
         with Image.open(file_path) as image:
-            result = predict(image.convert("RGB"))
+            image = image.convert("RGB")
+            print("✅ Image loaded successfully")
+
+            print("➡️ Running prediction...")
+            result = predict(image)
+
+            print("✅ Prediction completed:", result)
+
         return jsonify(result), 200
     except Exception as e:
         LOGGER.exception("Image prediction error: %s", e)

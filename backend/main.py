@@ -121,7 +121,7 @@ async def analyze(file: UploadFile = File(...)):
         if ext in ALLOWED_IMAGE_EXTENSIONS:
             with Image.open(tmp_path) as image:
                 pred = predict(image.convert("RGB"))
-            result = pred["prediction"].capitalize()
+            result = pred["label"].capitalize()
             confidence = pred["confidence"]
         else:
             pred = predict_video(tmp_path)

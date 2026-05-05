@@ -1,13 +1,13 @@
 import requests
 from pathlib import Path
 
-# API endpoint
 url = "http://127.0.0.1:5000/predict/image"
+input_dir = Path("test_images")
 
-# Folder with CLEAN images
-input_dir = Path("test_images_clean")
+correct = 0
+total = 0
 
-results = []
+print("🚀 Testing REAL images only...\n")
 
 for img_path in input_dir.glob("*"):
     if img_path.suffix.lower() not in [".jpg", ".jpeg", ".png", ".webp"]:
@@ -18,18 +18,27 @@ for img_path in input_dir.glob("*"):
     try:
         with open(img_path, "rb") as f:
             files = {"file": f}
-            response = requests.post(url, files=files)
+            response = requests.post(url, files=files, timeout=30)
 
         if response.status_code == 200:
             result = response.json()
-            print(f"➡️ {img_path.name} → {result}")
-            results.append((img_path.name, result))
+
+            pred = result.get("label", "unknown")
+            conf = result.get("confidence", 0)
+
+            print(f"➡️ Pred: {pred} ({conf:.4f})")
+
+            # Since all images are REAL
+            if pred == "real":
+                correct += 1
+
+            total += 1
+
         else:
-            print(f"❌ Failed: {img_path.name} (status {response.status_code})")
+            print(f"❌ Failed: {img_path.name}")
 
     except Exception as e:
-        print(f"❌ Error processing {img_path.name}: {e}")
+        print(f"❌ Error: {e}")
 
-print("\n=== SUMMARY ===")
-for name, res in results:
-    print(f"{name} → {res}")
+print("\n=== FINAL RESULT ===")
+print(f"Real Accuracy: {correct}/{total} = {correct/total if total else 0:.2f}")

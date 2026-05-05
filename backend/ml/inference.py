@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 
 import cv2
 import torch
+import torch.nn.functional as F
 from PIL import Image
 
 from .config import VIDEO_MAX_FRAMES_TO_SCAN, VIDEO_SAMPLE_FRAMES
@@ -22,20 +23,29 @@ def _predict_tensor(tensor: torch.Tensor) -> Dict[str, Any]:
     x = tensor.to(device)
 
     with torch.no_grad():
-        logits = model(x)
-        probs = torch.softmax(logits, dim=1)[0]
-        pred_idx = int(torch.argmax(probs).item())
-        confidence = float(probs[pred_idx].item())
+        output = model(x)
+        probs = F.softmax(output, dim=1)
+        prob_fake = probs[0][1].item()
 
-    return {"prediction": IDX_TO_LABEL[pred_idx], "confidence": confidence, "raw_probs": probs.detach().cpu().tolist()}
+    THRESHOLD = 0.6
 
+    label = "fake" if prob_fake > THRESHOLD else "real"
+    confidence = prob_fake if label == "fake" else 1 - prob_fake
+
+    return {
+        "label": label,
+        "confidence": confidence
+    }
 
 def predict(image: Image.Image) -> Dict[str, Any]:
     start = time.perf_counter()
     result = _predict_tensor(preprocess_image(image))
     elapsed_ms = (time.perf_counter() - start) * 1000
     LOGGER.info("Image inference completed in %.2f ms", elapsed_ms)
-    return {"prediction": result["prediction"], "confidence": result["confidence"]}
+    return {
+        "label": result["label"],
+        "confidence": result["confidence"]
+    }
 
 
 def _sample_frame_indices(total_frames: int, sample_count: int) -> List[int]:
@@ -76,7 +86,7 @@ def predict_video(video_path: str) -> Dict[str, Any]:
                 frame_predictions.append(
                     {
                         "frame_index": frame_idx,
-                        "prediction": pred["prediction"],
+                        "prediction": pred["label"],
                         "confidence": pred["confidence"],
                     }
                 )

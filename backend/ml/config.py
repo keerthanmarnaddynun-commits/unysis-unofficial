@@ -8,7 +8,13 @@ import torch
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
-MODEL_PATH = Path(os.getenv("BHARATSHIELD_MODEL_PATH", PROJECT_ROOT / "models" / "frame_model.pth")).resolve()
+MODEL_PATH = Path(
+    os.getenv(
+        "BHARATSHIELD_MODEL_PATH",
+        PROJECT_ROOT / "ml_pipeline" / "models" / "frame_model.pth"
+    )
+).resolve()
+
 UPLOAD_DIR = Path(os.getenv("BHARATSHIELD_UPLOAD_DIR", BACKEND_ROOT / "uploads")).resolve()
 
 MAX_IMAGE_SIZE_MB = int(os.getenv("BHARATSHIELD_MAX_IMAGE_SIZE_MB", "20"))
