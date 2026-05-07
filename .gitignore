@@ -131,3 +131,15 @@ ml_pipeline/processed_data/
 test_images/
 test_images_clean/
 backend/uploads/
+
+test_fake_images/
+test_real_images/
+real_images_run1/
+images_real_manual_collected
+
+
+download_custom.py
+download_real.py
+clean_test_images.py
+
+

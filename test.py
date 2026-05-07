@@ -2,12 +2,14 @@ import requests
 from pathlib import Path
 
 url = "http://127.0.0.1:5000/predict/image"
-input_dir = Path("test_images")
+# input_dir = Path("test_real_images")
+input_dir = Path("test_fake_images")
 
 correct = 0
 total = 0
 
-print("🚀 Testing REAL images only...\n")
+# print("🚀 Testing REAL images only...\n")
+print("🚀 Testing FAKE images only...\n")
 
 for img_path in input_dir.glob("*"):
     if img_path.suffix.lower() not in [".jpg", ".jpeg", ".png", ".webp"]:
@@ -28,8 +30,9 @@ for img_path in input_dir.glob("*"):
 
             print(f"➡️ Pred: {pred} ({conf:.4f})")
 
-            # Since all images are REAL
-            if pred == "real":
+            # Since all images are FAKE
+            if pred == "fake":
+                #  if pred == "real": for real 
                 correct += 1
 
             total += 1
@@ -41,4 +44,4 @@ for img_path in input_dir.glob("*"):
         print(f"❌ Error: {e}")
 
 print("\n=== FINAL RESULT ===")
-print(f"Real Accuracy: {correct}/{total} = {correct/total if total else 0:.2f}")
+print(f" Accuracy: {correct}/{total} = {correct/total if total else 0:.2f}")
