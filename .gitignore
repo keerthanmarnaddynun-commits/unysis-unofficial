@@ -131,3 +131,7 @@ ml_pipeline/processed_data/
 test_images/
 test_images_clean/
 backend/uploads/
+
+Style3GAN/
+final_dataset/
+
