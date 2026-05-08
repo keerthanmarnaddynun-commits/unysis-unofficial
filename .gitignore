@@ -132,6 +132,10 @@ test_images/
 test_images_clean/
 backend/uploads/
 
+
+Style3GAN/
+final_dataset/
+
 test_fake_images/
 test_real_images/
 real_images_run1/
@@ -141,5 +145,6 @@ images_real_manual_collected
 download_custom.py
 download_real.py
 clean_test_images.py
+
 
 
