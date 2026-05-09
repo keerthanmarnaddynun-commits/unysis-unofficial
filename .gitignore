@@ -146,5 +146,10 @@ download_custom.py
 download_real.py
 clean_test_images.py
 
+FFHQ
+
+real_images_run/
+
+
 
 
