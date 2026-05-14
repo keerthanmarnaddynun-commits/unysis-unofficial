@@ -149,7 +149,8 @@ clean_test_images.py
 FFHQ
 
 real_images_run/
-
+final_dataset_aligned/
+run_training.ps1
 
 
 
