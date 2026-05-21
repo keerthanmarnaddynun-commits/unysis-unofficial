@@ -152,5 +152,9 @@ real_images_run/
 final_dataset_aligned/
 run_training.ps1
 
-
-
+test_data/
+run_image/
+fft/fft_env/
+fft/fft_output/
+training_output/
+.model_cache/

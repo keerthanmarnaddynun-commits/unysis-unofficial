@@ -37,7 +37,48 @@ from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
+import torchvision
 from torchvision.models import efficientnet_b4
+
+print(f"Torch version: {torch.__version__}")
+print(f"Torchvision version: {torchvision.__version__}")
+
+def _check_torch_version():
+    import warnings
+    t_v = torch.__version__.split('+')[0]
+    tv_v = torchvision.__version__.split('+')[0]
+    compat_map = {
+        "2.6.0": ["0.21.0"],
+        "2.5.1": ["0.20.1", "0.20.0"],
+        "2.5.0": ["0.20.0"],
+        "2.4.1": ["0.19.1"],
+        "2.4.0": ["0.19.0"],
+        "2.3.1": ["0.18.1"],
+        "2.3.0": ["0.18.0"],
+        "2.2.2": ["0.17.2"],
+        "2.2.1": ["0.17.1"],
+        "2.2.0": ["0.17.0"],
+        "2.1.2": ["0.16.2"],
+        "2.1.1": ["0.16.1"],
+        "2.1.0": ["0.16.0"],
+    }
+    t_base = ".".join(t_v.split('.')[:3])
+    if t_base in compat_map:
+        if tv_v not in compat_map[t_base]:
+            warnings.warn(
+                f"Version mismatch: torch {torch.__version__} with torchvision {torchvision.__version__}. "
+                f"Expected torchvision to be one of {compat_map[t_base]} for torch {t_base}. "
+                "Install matching versions from the official PyTorch selector.",
+                RuntimeWarning
+            )
+    else:
+        warnings.warn(
+            f"Caution: Torch version {torch.__version__} is not in the known compatibility map. "
+            f"Using torchvision {torchvision.__version__}. Proceed with caution.",
+            RuntimeWarning
+        )
+
+_check_torch_version()
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +181,7 @@ def build_train_compose_final(
     """Full train pipeline ending with Normalize + ToTensorV2."""
     base = [
         A.HorizontalFlip(p=0.5),
-        A.Aquiine(
+        A.Affine(
             translate_percent=(-0.0625, 0.0625),
             scale=(0.88, 1.12),
             rotate=(-18.0, 18.0),
@@ -442,6 +483,13 @@ class ModelEMA:
                 param.data.copy_(self.backup[name])
         self.backup.clear()
 
+    def state_dict(self) -> Dict[str, torch.Tensor]:
+        return {"shadow": {k: v.cpu() for k, v in self.shadow.items()}}
+
+    def load_state_dict(self, state_dict: Dict[str, torch.Tensor], device: torch.device) -> None:
+        if "shadow" in state_dict:
+            self.shadow = {k: v.to(device) for k, v in state_dict["shadow"].items()}
+
 
 # ---------------------------------------------------------------------------
 # Metrics
@@ -639,6 +687,34 @@ def _chw_to_hwc_uint8(x: np.ndarray) -> np.ndarray:
     return np.transpose(x, (1, 2, 0))
 
 
+@torch.no_grad()
+def validate_batched(
+    model: nn.Module,
+    loader: DataLoader,
+    device: torch.device,
+    threshold: float,
+) -> Tuple[float, Dict[str, float], np.ndarray, np.ndarray]:
+    model.eval()
+    all_scores: List[float] = []
+    all_true: List[float] = []
+
+    for x, y in tqdm(loader, desc="val", leave=False):
+        x = x.to(device, non_blocking=True).float()
+        with autocast(device_type="cuda", enabled=(device.type == "cuda")):
+            logit = model(x)
+        scores = torch.sigmoid(logit).view(-1).cpu().numpy()
+        all_scores.extend(scores.tolist())
+        if isinstance(y, torch.Tensor):
+            all_true.extend(y.numpy().tolist())
+        else:
+            all_true.extend(y.tolist())
+
+    scores = np.asarray(all_scores, dtype=np.float64)
+    y_true = np.asarray(all_true, dtype=np.float64)
+    m = binary_metrics(y_true, scores, threshold=threshold)
+    return float("nan"), m, y_true, scores
+
+
 class DeepfakeAlignedRawValDataset(Dataset):
     """Validation: yield uint8 HWC RGB (no Albumentations)."""
 
@@ -668,10 +744,11 @@ def val_collate_fn(batch):
     return np.stack(images, axis=0), torch.stack(labels, dim=0)
 
 
-def build_val_dataloader(
+def build_val_tta_dataloader(
     val_paths: List[Path],
     val_labels: List[float],
     workers: int,
+    prefetch_factor: Optional[int] = None,
 ) -> DataLoader:
     ds = DeepfakeAlignedRawValDataset(val_paths, val_labels)
     return DataLoader(
@@ -681,7 +758,31 @@ def build_val_dataloader(
         num_workers=workers,
         pin_memory=True,
         persistent_workers=workers > 0,
+        prefetch_factor=prefetch_factor if workers > 0 else None,
         collate_fn=val_collate_fn,
+    )
+
+
+def build_val_dataloader(
+    val_paths: List[Path],
+    val_labels: List[float],
+    batch_size: int,
+    workers: int,
+    prefetch_factor: Optional[int] = None,
+) -> DataLoader:
+    transform = A.Compose([
+        A.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+        ToTensorV2(),
+    ])
+    ds = DeepfakeAlignedDataset(val_paths, val_labels, transform=transform)
+    return DataLoader(
+        ds,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=workers,
+        pin_memory=True,
+        persistent_workers=workers > 0,
+        prefetch_factor=prefetch_factor if workers > 0 else None,
     )
 
 
@@ -693,6 +794,7 @@ def build_train_dataloader_only(
     train_transform: A.Compose,
     simulate_social: bool = False,
     simulate_social_p: float = 0.0,
+    prefetch_factor: Optional[int] = None,
 ) -> DataLoader:
     train_ds = DeepfakeAlignedDataset(
         train_paths,
@@ -709,6 +811,7 @@ def build_train_dataloader_only(
         num_workers=workers,
         pin_memory=True,
         persistent_workers=workers > 0,
+        prefetch_factor=prefetch_factor if workers > 0 else None,
     )
 
 
@@ -732,14 +835,13 @@ def run_phase(
     mixup_prob: float,
     mixup_alpha: float,
     phase_name: str,
-    tta_list: List[A.Compose],
-    tta_post: A.Compose,
     thr: float,
     early_patience: int,
     enable_early_stop: bool,
     out_dir: Path,
     scaler: GradScaler,
     global_epoch_start: int,
+    resume_ckpt: Optional[Dict] = None,
 ) -> Tuple[bool, int]:
     """
     Train one phase. Writes rows to log_rows.
@@ -751,7 +853,15 @@ def run_phase(
     total_steps = steps_per_epoch * epochs
     scheduler = scheduler_one_cycle(optimizer, max_lr=lr, total_steps=total_steps, pct_start=0.1)
 
-    for ep in range(epochs):
+    start_ep = 0
+    if resume_ckpt is not None and resume_ckpt.get("phase") == phase_name:
+        optimizer.load_state_dict(resume_ckpt["optimizer_state_dict"])
+        if resume_ckpt["scheduler_state_dict"] and scheduler:
+            scheduler.load_state_dict(resume_ckpt["scheduler_state_dict"])
+        start_ep = (resume_ckpt["epoch"] - global_epoch_start) + 1
+        print(f"Resuming {phase_name} phase from epoch {start_ep}/{epochs}")
+
+    for ep in range(start_ep, epochs):
         global_epoch = global_epoch_start + ep
         tr_loss = train_one_epoch(
             model,
@@ -768,7 +878,7 @@ def run_phase(
         )
 
         ema.apply_to_model(model)
-        _, metrics, _, _ = validate_tta(model, val_loader, device, tta_list, tta_post, thr)
+        _, metrics, _, _ = validate_batched(model, val_loader, device, thr)
         ema.restore(model)
 
         row = {
@@ -811,6 +921,20 @@ def run_phase(
             if enable_early_stop:
                 state.patience_counter += 1
 
+        torch.save(
+            {
+                "epoch": global_epoch,
+                "phase": phase_name,
+                "model_state_dict": _cpu_state_dict(model),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict() if scheduler else None,
+                "scaler_state_dict": scaler.state_dict(),
+                "ema_state_dict": ema.state_dict(),
+                "best_auc": state.best_auc,
+            },
+            out_dir / "latest_checkpoint.pth",
+        )
+
         if enable_early_stop and state.patience_counter >= early_patience:
             print(f"Early stopping: no val_auc improvement for {early_patience} epochs.")
             return True, global_epoch_start + ep + 1
@@ -837,23 +961,27 @@ def main() -> None:
     parser.add_argument("--data_dir", type=str, default="final_dataset_aligned")
     parser.add_argument("--out_dir", type=str, default="training_output")
     parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--val_batch_size", type=int, default=32)
+    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--prefetch_factor", type=int, default=2)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default=None, help="cuda:0 or cpu; default auto")
     parser.add_argument("--epochs_head", type=int, default=5, help="Phase 1: frozen backbone")
-    parser.add_argument("--epochs_ft", type=int, default=50, help="Phase 2: full fine-tune (40–60)")
+    parser.add_argument("--epochs_ft", type=int, default=55, help="Phase 2: full fine-tune (40–60)")
     parser.add_argument("--lr_head", type=float, default=1e-3)
     parser.add_argument("--lr_ft", type=float, default=1e-5)
     parser.add_argument("--weight_decay", type=float, default=1e-4)
     parser.add_argument("--grad_clip", type=float, default=1.0)
     parser.add_argument("--ema_decay", type=float, default=0.9999)
-    parser.add_argument("--early_patience", type=int, default=10)
+    parser.add_argument("--early_patience", type=int, default=7)
     parser.add_argument("--mixup_alpha", type=float, default=0.4)
     parser.add_argument("--mixup_prob", type=float, default=0.5)
     parser.add_argument("--simulate_social", action="store_true")
-    parser.add_argument("--simulate_social_p", type=float, default=0.15)
+    parser.add_argument("--simulate_social_p", type=float, default=0.05)
     parser.add_argument("--val_threshold", type=float, default=0.5)
     parser.add_argument("--no_pretrained", action="store_true")
+    parser.add_argument("--tta_final_eval", action="store_true")
+    parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume from")
     args = parser.parse_args()
 
     set_seed(args.seed)
@@ -870,7 +998,7 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     log_csv = out_dir / "training_logs.csv"
-    if log_csv.exists():
+    if log_csv.exists() and not args.resume:
         log_csv.unlink()
 
     paths, labels = collect_paths(data_dir)
@@ -901,8 +1029,9 @@ def main() -> None:
         train_transform,
         simulate_social=args.simulate_social,
         simulate_social_p=args.simulate_social_p,
+        prefetch_factor=args.prefetch_factor,
     )
-    val_loader = build_val_dataloader(val_p, val_y, args.workers)
+    val_loader = build_val_dataloader(val_p, val_y, args.val_batch_size, args.workers, args.prefetch_factor)
 
     tta_list = build_tta_transforms_list()
     tta_post = build_tta_post_normalize()
@@ -914,37 +1043,55 @@ def main() -> None:
 
     state = TrainState()
     log_rows: List[Dict] = []
+    resume_ckpt = None
+    skip_warmup = False
+
+    if args.resume:
+        print(f"Resuming from checkpoint: {args.resume}")
+        resume_ckpt = torch.load(args.resume, map_location="cpu", weights_only=False)
+        model.load_state_dict(resume_ckpt["model_state_dict"])
+        if resume_ckpt.get("ema_state_dict"):
+            ema.load_state_dict(resume_ckpt["ema_state_dict"], device)
+        if resume_ckpt.get("scaler_state_dict"):
+            scaler.load_state_dict(resume_ckpt["scaler_state_dict"])
+        state.best_auc = resume_ckpt.get("best_auc", -1.0)
+        if resume_ckpt.get("phase") == "finetune":
+            skip_warmup = True
 
     global_epoch = 0
     freeze_backbone(model, freeze=True)
-    _, global_epoch = run_phase(
-        model,
-        train_loader,
-        val_loader,
-        device,
-        focal,
-        lr=args.lr_head,
-        weight_decay=args.weight_decay,
-        epochs=args.epochs_head,
-        grad_clip=args.grad_clip,
-        ema=ema,
-        state=state,
-        log_rows=log_rows,
-        mixup_prob=args.mixup_prob,
-        mixup_alpha=args.mixup_alpha,
-        phase_name="warmup",
-        tta_list=tta_list,
-        tta_post=tta_post,
-        thr=args.val_threshold,
-        early_patience=args.early_patience,
-        enable_early_stop=False,
-        out_dir=out_dir,
-        scaler=scaler,
-        global_epoch_start=global_epoch,
-    )
+    if not skip_warmup:
+        _, global_epoch = run_phase(
+            model,
+            train_loader,
+            val_loader,
+            device,
+            focal,
+            lr=args.lr_head,
+            weight_decay=args.weight_decay,
+            epochs=args.epochs_head,
+            grad_clip=args.grad_clip,
+            ema=ema,
+            state=state,
+            log_rows=log_rows,
+            mixup_prob=args.mixup_prob,
+            mixup_alpha=args.mixup_alpha,
+            phase_name="warmup",
+            thr=args.val_threshold,
+            early_patience=args.early_patience,
+            enable_early_stop=False,
+            out_dir=out_dir,
+            scaler=scaler,
+            global_epoch_start=global_epoch,
+            resume_ckpt=resume_ckpt if resume_ckpt and resume_ckpt.get("phase") == "warmup" else None,
+        )
+    else:
+        global_epoch = args.epochs_head
 
     freeze_backbone(model, freeze=False)
-    state.patience_counter = 0
+    if not (resume_ckpt and resume_ckpt.get("phase") == "finetune"):
+        state.patience_counter = 0
+
     finetune_stopped_early, _ = run_phase(
         model,
         train_loader,
@@ -961,14 +1108,13 @@ def main() -> None:
         mixup_prob=args.mixup_prob,
         mixup_alpha=args.mixup_alpha,
         phase_name="finetune",
-        tta_list=tta_list,
-        tta_post=tta_post,
         thr=args.val_threshold,
         early_patience=args.early_patience,
         enable_early_stop=True,
         out_dir=out_dir,
         scaler=scaler,
         global_epoch_start=global_epoch,
+        resume_ckpt=resume_ckpt if resume_ckpt and resume_ckpt.get("phase") == "finetune" else None,
     )
     if finetune_stopped_early:
         print("Fine-tune stopped early (validation AUC patience exhausted).")
@@ -987,6 +1133,13 @@ def main() -> None:
         },
         out_dir / "ema_model.pth",
     )
+    
+    if args.tta_final_eval:
+        print("Running final evaluation with TTA...")
+        val_tta_loader = build_val_tta_dataloader(val_p, val_y, args.workers, args.prefetch_factor)
+        _, tta_metrics, _, _ = validate_tta(model, val_tta_loader, device, tta_list, tta_post, args.val_threshold)
+        print(f"[TTA Final Eval] val_auc={tta_metrics['auc']:.4f} val_f1={tta_metrics['f1']:.4f} val_eer={tta_metrics['eer']:.4f} val_acc={tta_metrics['acc']:.4f}")
+
     ema.restore(model)
 
     print(f"Best val_auc (EMA snapshot when improved): {state.best_auc:.4f}")

@@ -1,0 +1,7 @@
+{
+  "method": "logistic",
+  "intercept": -0.8469469399909318,
+  "coef_spatial": 0.8485768883751736,
+  "coef_fft": 0.7818221653459649,
+  "fitted": true
+}

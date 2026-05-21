@@ -19,6 +19,7 @@ function MainApp() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("landing")
   const [userRole, setUserRole] = useState<Role | null>(null)
   const [initialUrl, setInitialUrl] = useState("")
+  const [analysisData, setAnalysisData] = useState<any>(null)
 
   useEffect(() => {
     if (sourceUrl) {
@@ -66,7 +67,10 @@ function MainApp() {
         <UploadScreen
           mode="file"
           onBack={() => navigateTo("landing")}
-          onAnalyze={() => navigateTo("analysis")}
+          onAnalyze={(result) => {
+            setAnalysisData(result)
+            navigateTo("analysis")
+          }}
         />
       )}
 
@@ -75,15 +79,20 @@ function MainApp() {
           mode="url"
           initialUrl={initialUrl}
           onBack={() => navigateTo("landing")}
-          onAnalyze={() => navigateTo("analysis")}
+          onAnalyze={(result) => {
+            setAnalysisData(result)
+            navigateTo("analysis")
+          }}
         />
       )}
 
       {currentScreen === "analysis" && (
-        <AnalysisResult
-          onContinue={() => navigateTo("role-output")}
-          onBack={() => navigateTo("landing")}
-        />
+          <AnalysisResult
+            data={analysisData}
+            sourceInfo={analysisData?.sourceInfo}
+            onContinue={() => navigateTo("role-output")}
+            onBack={() => navigateTo("landing")}
+          />
       )}
 
       {currentScreen === "role-output" && userRole && (
