@@ -1,123 +1,41 @@
 {
-    "submission_id": "BS-E43FFD6DBBA7",
-    "timestamp_utc": "2026-05-21T06:07:05.529155+00:00",
-    "timestamp_unix": 1779343625,
+    "submission_id": "BS-FCF803BDC4D3",
+    "timestamp_utc": "2026-05-30T04:03:22.976401+00:00",
+    "timestamp_unix": 1780113802,
     "file": {
-        "name": "modi.mp4",
-        "size_bytes": 3117673,
-        "size_human": "3.0 MB",
-        "type": "mp4",
-        "media_type": "video",
-        "sha256": "9e68ae848c30c71f31b4516e95959b59761eaf16041ae6bac63eafe8a0e8a9b2"
+        "name": "fake_1.jpg",
+        "size_bytes": 127474,
+        "size_human": "124.5 KB",
+        "type": "jpg",
+        "media_type": "image",
+        "sha256": "3cad456077b3a773447aad59df8e67395cd75e092680ccebbe937a70412cba07"
     },
     "detection": {
-        "label": "Fake",
-        "confidence": 0.5,
-        "confidence_label": "Low",
-        "fake_probability": 0.5,
-        "risk_level": "MEDIUM",
-        "is_deepfake": true
+        "label": "Real",
+        "confidence": 1.0,
+        "confidence_label": "Very High",
+        "fake_probability": 0.0,
+        "risk_level": "MINIMAL",
+        "is_deepfake": false
     },
     "model_breakdown": {
         "visual": {
-            "average_fake_prob": 0.5,
-            "frames_analyzed": 0,
-            "label": "Unknown"
-        },
-        "audio": {
-            "fake_prob": 0.5,
-            "label": "Unknown",
-            "note": "Could not load audio file."
-        },
-        "factcheck": {
-            "available": true,
-            "transcript": "Ini adalah\u043d\u0430\u043a\u043e tu barking yang pertulangan. Saya bukan Singaporeandev.08\u4f46 anda mungkin jauk renewable\u6a13,\u0430\u043a\u0438 dienjuran Norr\ufffd\ufffd\u4ea4 dan gotten sukar. Pei beliau mem gotasi, tetapi kita endorsekikan ke pada t\u00f4i.",
-            "language": "ms",
-            "claims": [
-                {
-                    "claim": "Ini adalah\u043d\u0430\u043a\u043e tu barking yang pertulangan",
-                    "entity": "",
-                    "type": "SENTENCE",
-                    "priority": "MEDIUM",
-                    "newsapi_verdict": "UNVERIFIABLE",
-                    "newsapi_articles": [],
-                    "ddg_articles": [],
-                    "ddg_verdict": {
-                        "status": "UNAVAILABLE",
-                        "similarity": 0.0,
-                        "best_match": "sentence-transformers not available"
-                    },
-                    "combined_verdict": "UNVERIFIED"
-                },
-                {
-                    "claim": "Saya bukan Singaporeandev",
-                    "entity": "",
-                    "type": "SENTENCE",
-                    "priority": "MEDIUM",
-                    "newsapi_verdict": "UNVERIFIABLE",
-                    "newsapi_articles": [],
-                    "ddg_articles": [],
-                    "ddg_verdict": {
-                        "status": "UNAVAILABLE",
-                        "similarity": 0.0,
-                        "best_match": "sentence-transformers not available"
-                    },
-                    "combined_verdict": "UNVERIFIED"
-                },
-                {
-                    "claim": "08\u4f46 anda mungkin jauk renewable\u6a13,\u0430\u043a\u0438 dienjuran Norr\ufffd\ufffd\u4ea4 dan gotten sukar",
-                    "entity": "",
-                    "type": "SENTENCE",
-                    "priority": "MEDIUM",
-                    "newsapi_verdict": "UNVERIFIABLE",
-                    "newsapi_articles": [],
-                    "ddg_articles": [],
-                    "ddg_verdict": {
-                        "status": "UNAVAILABLE",
-                        "similarity": 0.0,
-                        "best_match": "sentence-transformers not available"
-                    },
-                    "combined_verdict": "UNVERIFIED"
-                },
-                {
-                    "claim": "Pei beliau mem gotasi, tetapi kita endorsekikan ke pada t\u00f4i",
-                    "entity": "",
-                    "type": "SENTENCE",
-                    "priority": "MEDIUM",
-                    "newsapi_verdict": "UNVERIFIABLE",
-                    "newsapi_articles": [],
-                    "ddg_articles": [],
-                    "ddg_verdict": {
-                        "status": "UNAVAILABLE",
-                        "similarity": 0.0,
-                        "best_match": "sentence-transformers not available"
-                    },
-                    "combined_verdict": "UNVERIFIED"
-                }
-            ],
-            "harm_analysis": {
-                "label": "UNAVAILABLE",
-                "harmful_score": 0.0,
-                "flags": [],
-                "scores": {},
-                "note": "transformers library not available or model failed to load"
-            },
-            "overall_misinfo_risk": "MINIMAL",
-            "warnings": [
-                "DuckDuckGo search unavailable.",
-                "DuckDuckGo search unavailable.",
-                "DuckDuckGo search unavailable.",
-                "DuckDuckGo search unavailable."
+            "cnn_prob": 0.19931057598998111,
+            "fft_prob": 6.864689646281633e-09,
+            "fusion_prob": 8.136667020153254e-07,
+            "reliability": "LOW",
+            "ood_flags": [
+                "very_confident_real"
             ]
         }
     },
     "processing": {
-        "time_ms": 19341.3,
+        "time_ms": 16395.0,
         "system_name": "BharatShield Deepfake Detection System",
         "system_version": "2.0.0"
     },
     "integrity": {
-        "sha256": "9e68ae848c30c71f31b4516e95959b59761eaf16041ae6bac63eafe8a0e8a9b2",
+        "sha256": "3cad456077b3a773447aad59df8e67395cd75e092680ccebbe937a70412cba07",
         "chain_of_custody": "BSA Section 63 compliant audit log entry created"
     }
 }

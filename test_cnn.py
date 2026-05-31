@@ -276,6 +276,8 @@ def load_model(model_path: Path, device: torch.device) -> Tuple[nn.Module, Dict]
     return model, meta
 
 
+THRESHOLD = 0.15
+
 @torch.no_grad()
 def predict_logit(
     model: nn.Module,
@@ -284,18 +286,32 @@ def predict_logit(
     transform: A.Compose,
     debug: bool = False,
 ) -> float:
-    """Single forward pass; matches validate_batched (no TTA)."""
-    aug = transform(image=image_np)
-    tensor = aug["image"].unsqueeze(0).to(device, non_blocking=True).float()
-    if debug:
-        print(
-            f"  [DEBUG] tensor min={tensor.min().item():.3f}, "
-            f"max={tensor.max().item():.3f}, mean={tensor.mean().item():.3f}, "
-            f"shape={tuple(tensor.shape)}"
-        )
-    with torch.amp.autocast("cuda", enabled=(device.type == "cuda")):
-        logit = model(tensor)
-    return float(logit.view(-1).item())
+    """TTA: average probability across original, blurred, and JPEG variants."""
+    import cv2
+    
+    variants = [
+        image_np,
+        cv2.GaussianBlur(image_np, (5, 5), 0)
+    ]
+    _, enc = cv2.imencode('.jpg', image_np, [cv2.IMWRITE_JPEG_QUALITY, 60])
+    variants.append(cv2.imdecode(enc, cv2.IMREAD_COLOR))
+    
+    probs = []
+    for var in variants:
+        aug = transform(image=var)
+        tensor = aug["image"].unsqueeze(0).to(device, non_blocking=True).float()
+        with torch.amp.autocast("cuda", enabled=(device.type == "cuda")):
+            logit = model(tensor)
+        l = float(logit.view(-1).item())
+        prob = 1.0 / (1.0 + np.exp(-l))
+        probs.append(prob)
+        
+    avg_prob = float(np.mean(probs))
+    eps = 1e-9
+    avg_prob_clamped = max(min(avg_prob, 1.0 - eps), eps)
+    avg_logit = np.log(avg_prob_clamped / (1.0 - avg_prob_clamped))
+    return float(avg_logit)
+
 
 
 def logit_to_fake_prob(logit: float, invert_output: bool = False) -> float:
@@ -303,8 +319,8 @@ def logit_to_fake_prob(logit: float, invert_output: bool = False) -> float:
     return float(1.0 - prob) if invert_output else float(prob)
 
 
-def prob_to_pred(prob_fake: float, threshold: float = 0.5) -> int:
-    return 1 if prob_fake >= threshold else 0
+def prob_to_pred(prob_fake: float, threshold: float = THRESHOLD) -> int:
+    return 1 if prob_fake >= THRESHOLD else 0
 
 
 def infer_one(

@@ -158,17 +158,22 @@ async def analyze(file: UploadFile = File(...)):
             )
             return JSONResponse(content={
                 "media_type": "image",
-                "final_prediction": str(res.label_final).capitalize(),
-                "confidence": float(res.confidence),
-                "reliability": str(res.reliability),
-                "reason": str(res.reason),
-                "cnn_prediction": str(res.cnn.label),
-                "cnn_prob_fake": float(res.cnn.prob_fake),
-                "fft_prediction": str(res.fft.label),
-                "fft_prob_fake": float(res.fft.prob_fake),
-                "fusion_prediction": str(res.label_final),
-                "fusion_prob_fake": float(res.prob_final),
-                "ood_flags": list(res.ood_flags) if isinstance(res.ood_flags, (list, tuple)) else []
+                # Frontend-expected key names
+                "prediction": str(getattr(res, "label_final", "")).capitalize(),
+                "final_prediction": str(getattr(res, "label_final", "")).capitalize(),
+                "confidence": float(getattr(res, "confidence", 0.0)),
+                "reliability": str(getattr(res, "reliability", "")),
+                "reason": str(getattr(res, "reason", "")),
+                "ood_flags": list(res.ood_flags) if isinstance(getattr(res, "ood_flags", None), (list, tuple)) else [],
+                # CNN branch
+                "cnn_prediction": str(getattr(res.cnn, "label", "")) if res.cnn else "",
+                "cnn_probability": float(getattr(res.cnn, "prob_fake", 0.0)) if res.cnn else 0.0,
+                # FFT branch
+                "fft_prediction": str(getattr(res.fft, "label", "")) if res.fft else "",
+                "fft_probability": float(getattr(res.fft, "prob_fake", 0.0)) if res.fft else 0.0,
+                # Fusion branch
+                "fusion_prediction": str(getattr(res, "label_final", "")).capitalize(),
+                "fusion_probability": float(getattr(res, "prob_final", 0.0)),
             })
         else:
             pred = predict_video(tmp_path)

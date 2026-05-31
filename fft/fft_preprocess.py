@@ -27,7 +27,7 @@ from PIL import Image
 # ---------------------------------------------------------------------------
 
 def image_to_fft_spectrum(
-    img_path: str | Path,
+    img_or_path: str | Path | np.ndarray | Image.Image,
     image_size: int = 224,
     channel_mode: str = "ycbcr_y",
 ) -> np.ndarray:
@@ -37,7 +37,16 @@ def image_to_fft_spectrum(
     Returns:
         spectrum: float32 ndarray of shape (image_size, image_size), unnormalised.
     """
-    with Image.open(img_path) as img:
+    opened_img = None
+    if isinstance(img_or_path, np.ndarray):
+        img = Image.fromarray(img_or_path)
+    elif isinstance(img_or_path, Image.Image):
+        img = img_or_path
+    else:
+        opened_img = Image.open(img_or_path)
+        img = opened_img
+
+    try:
         img = img.convert("RGB")
         img = img.resize((image_size, image_size), Image.BILINEAR)
 
@@ -47,6 +56,9 @@ def image_to_fft_spectrum(
         else:
             # Grayscale fallback
             arr = np.array(img.convert("L"), dtype=np.float32)
+    finally:
+        if opened_img is not None:
+            opened_img.close()
 
     # 2D FFT -> center zero-frequency -> magnitude -> log-scale
     spectrum = np.fft.fft2(arr)
@@ -133,7 +145,7 @@ def normalize_dataset(spectrum: np.ndarray, mean: float, std: float) -> np.ndarr
 # ---------------------------------------------------------------------------
 
 def preprocess_image(
-    img_path: str | Path,
+    img_path: str | Path | np.ndarray | Image.Image,
     image_size: int,
     channel_mode: str,
     norm_mode: str,

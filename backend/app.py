@@ -101,21 +101,36 @@ def analyze():
         if ext in ALLOWED_IMAGE_EXTENSIONS:
             with Image.open(file_path) as image:
                 pred = predict(image.convert("RGB"))
-            result = pred["prediction"].capitalize()
-            confidence = pred["confidence"]
         else:
             pred = predict_video(file_path)
-            result = pred["final_prediction"].capitalize()
-            confidence = pred["confidence"]
+
+        # Map actual inference output safely
+        prediction_val = pred.get("final_prediction") or pred.get("label")
+        result = prediction_val.capitalize() if prediction_val else "Unknown"
+        confidence = float(pred.get("confidence", 0.0))
 
         # --- Step 2: Metadata ---
         metadata = create_metadata(file_path, result, confidence)
 
         # --- Step 3: Legal Notice ---
         notice = generate_legal_notice(metadata)
-
-        # Add legal notice to response
         metadata["legal_notice"] = notice if notice else ""
+
+        # Ensure frontend receives all expected fields
+        metadata.update({
+            "prediction": result,
+            "final_prediction": result,
+            "confidence": confidence,
+            "reliability": pred.get("reliability"),
+            "reason": pred.get("reason"),
+            "ood_flags": pred.get("ood_flags", []),
+            "cnn_prediction": pred.get("cnn_prediction"),
+            "cnn_probability": pred.get("cnn_probability"),
+            "fft_prediction": pred.get("fft_prediction"),
+            "fft_probability": pred.get("fft_probability"),
+            "fusion_prediction": pred.get("fusion_prediction"),
+            "fusion_probability": pred.get("fusion_probability"),
+        })
 
         # Return final JSON response
         return jsonify(metadata)
@@ -164,6 +179,10 @@ def predict_image():
 
             print("✅ Prediction completed:", result)
 
+        # Map to expected frontend schema if necessary
+        if "prediction" not in result and "label" in result:
+            result["prediction"] = result.pop("label")
+
         return jsonify(result), 200
     except Exception as e:
         LOGGER.exception("Image prediction error: %s", e)
@@ -194,6 +213,11 @@ def predict_video_endpoint():
     try:
         file_path = _save_upload_to_temp(file)
         result = predict_video(file_path)
+        
+        # Map to expected frontend schema if necessary
+        if "prediction" not in result and "final_prediction" in result:
+            result["prediction"] = result.pop("final_prediction")
+            
         return jsonify(result), 200
     except Exception as e:
         LOGGER.exception("Video prediction error: %s", e)

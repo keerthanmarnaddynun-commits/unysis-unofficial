@@ -31,16 +31,28 @@ if str(_REPO_ROOT) not in sys.path:
 if str(_FFT_DIR) not in sys.path:
     sys.path.insert(0, str(_FFT_DIR))
 
-from test_cnn import (
-    SUPPORTED_EXTS,
-    get_transform,
-    iter_image_paths,
-    load_image_pil,
-    load_model as load_cnn_model,
-    logit_to_fake_prob,
-    predict_logit,
-    preprocess_image as preprocess_cnn_image,
-)
+import os
+import sys
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+# Suppress prints during imports (e.g. Torch version from train_deepfake_detection.py)
+with open(os.devnull, "w") as f:
+    old_stdout = sys.stdout
+    sys.stdout = f
+    try:
+        from test_cnn import (
+            SUPPORTED_EXTS,
+            get_transform,
+            iter_image_paths,
+            load_image_pil,
+            load_model as load_cnn_model,
+            logit_to_fake_prob,
+            predict_logit,
+            preprocess_image as preprocess_cnn_image,
+        )
+    finally:
+        sys.stdout = old_stdout
 
 from fft_model import build_model as build_fft_model
 from fft_preprocess import (
@@ -58,7 +70,7 @@ DEFAULT_FFT_MODEL = _FFT_DIR / "fft_output" / "best_fft_model.pth"
 DEFAULT_FFT_STATS = _FFT_DIR / "fft_output" / "fft_stats.json"
 DEFAULT_FFT_RUN_CONFIG = _FFT_DIR / "fft_output" / "fft_run_config.json"
 DEFAULT_FUSION_BUNDLE = _FFT_DIR / "fusion_bundle"
-BRANCH_THRESHOLD = 0.5
+THRESHOLD = 0.15
 
 
 @dataclass
@@ -154,7 +166,7 @@ def run_cnn_branch(
     *,
     face_crop: bool,
     skip_no_face: bool,
-) -> Tuple[Optional[BranchResult], Optional[str], Optional[bool]]:
+) -> Tuple[Optional[BranchResult], Optional[str], Optional[bool], Optional[np.ndarray]]:
     prep = preprocess_cnn_image(
         pil_img,
         device=device,
@@ -163,15 +175,15 @@ def run_cnn_branch(
         resize_if_not_380=True,
     )
     if prep is None:
-        return None, "No face detected (CNN skipped; use without --skip_no_face to resize full image)", False
+        return None, "No face detected (CNN skipped; use without --skip_no_face to resize full image)", False, None
 
     logit = predict_logit(cnn_model, device, prep.image_np, transform)
     prob = logit_to_fake_prob(logit)
-    return BranchResult(logit=logit, prob_fake=prob, label=_label_from_prob(prob, BRANCH_THRESHOLD)), None, prep.face_detected
+    return BranchResult(logit=logit, prob_fake=prob, label=_label_from_prob(prob, THRESHOLD)), None, prep.face_detected, prep.image_np
 
 
 def run_fft_branch(
-    image_path: Path,
+    fft_input: Path | np.ndarray,
     fft_model: nn.Module,
     device: torch.device,
     fft_cfg: FFTPreprocessConfig,
@@ -179,8 +191,12 @@ def run_fft_branch(
     dataset_std: Optional[float],
     radial_mask: Optional[np.ndarray],
 ) -> BranchResult:
+    if isinstance(fft_input, np.ndarray):
+        print("DEBUG FFT input: face_crop")
+    else:
+        print("DEBUG FFT input: original_image")
     spectrum = preprocess_fft_image(
-        image_path,
+        fft_input,
         image_size=fft_cfg.image_size,
         channel_mode=fft_cfg.channel_mode,
         norm_mode=fft_cfg.norm_mode,
@@ -191,7 +207,7 @@ def run_fft_branch(
     )
     logit = run_fft_forward(fft_model, device, spectrum)
     prob = logit_to_fake_prob(logit)
-    return BranchResult(logit=logit, prob_fake=prob, label=_label_from_prob(prob, BRANCH_THRESHOLD))
+    return BranchResult(logit=logit, prob_fake=prob, label=_label_from_prob(prob, THRESHOLD))
 
 
 def fuse_logistic(
@@ -272,7 +288,7 @@ def infer_image(
     face_crop: bool,
     skip_no_face: bool,
 ) -> ImageInferenceResult:
-    fusion_threshold = float(bundle.thresholds.default)
+    fusion_threshold = THRESHOLD
     ood_flags = []
 
     try:
@@ -285,7 +301,7 @@ def infer_image(
     if width < 128 or height < 128:
         ood_flags.append("low_resolution")
 
-    cnn_result, cnn_warn, face_detected = run_cnn_branch(
+    cnn_result, cnn_warn, face_detected, face_img = run_cnn_branch(
         pil_img,
         cnn_model,
         device,
@@ -301,8 +317,20 @@ def infer_image(
     if face_crop and face_detected is False:
         ood_flags.append("no_face_detected")
 
+    from fft.fft_preprocess import build_radial_emphasis_mask
+
+    if fft_cfg.radial_emphasis:
+        radial_mask = build_radial_emphasis_mask(
+            fft_cfg.image_size,
+            sigma=fft_cfg.radial_emphasis_sigma
+        )
+    else:
+        radial_mask = None
+
+    fft_input = face_img if (face_crop and face_img is not None) else image_path
+
     fft_result = run_fft_branch(
-        image_path,
+        fft_input,
         fft_model,
         device,
         fft_cfg,
@@ -312,7 +340,16 @@ def infer_image(
     )
 
     prob_final = fuse_logistic(bundle, cnn_result.logit, fft_result.logit)
-    label_final = _label_from_prob(prob_final, fusion_threshold)
+    
+    FFT_ANOMALY_THRESHOLD = 0.8
+    fft_override = False
+    if fft_result.prob_fake > FFT_ANOMALY_THRESHOLD and prob_final <= fusion_threshold:
+        prob_final = max(prob_final, fft_result.prob_fake)
+        label_final = "FAKE"
+        fft_override = True
+    else:
+        label_final = _label_from_prob(prob_final, fusion_threshold)
+        
     # Compute confidence based on final prediction
     confidence = prob_final if label_final == "FAKE" else 1 - prob_final
     reliability, reason = assess_reliability(
@@ -323,6 +360,9 @@ def infer_image(
         fusion_threshold,
         ood_flags,
     )
+    
+    if fft_override:
+        reason = "FFT detected significant high-frequency anomalies (override)"
 
     return ImageInferenceResult(
         path=image_path,
@@ -343,18 +383,14 @@ def print_result(result: ImageInferenceResult) -> None:
     print("----------------------------------------")
     print(f"Image: {result.path.name}")
     print()
-    print(f"CNN:    {result.cnn.label} (prob={result.cnn.prob_fake:.3f})")
-    print(f"FFT:    {result.fft.label} (prob={result.fft.prob_fake:.3f})")
-    print(f"Fusion: {result.label_final} (prob={result.prob_final:.3f})")
+    print(f"CNN    : {result.cnn.label} ({result.cnn.prob_fake:.3f})")
+    print(f"FFT    : {result.fft.label} ({result.fft.prob_fake:.3f})")
+    print(f"Fusion : {result.label_final} ({result.prob_final:.3f})")
     print()
-    print(f"Confidence: {result.confidence:.3f}")
+    print(f"Confidence : {result.confidence:.3f}")
     print(f"Reliability: {result.reliability}")
-    print(f"Reason: {result.reason}")
-    flags_str = ", ".join(result.ood_flags)
-    print(f"OOD Flags: [{flags_str}]")
-    if result.warning:
-        print(f"Note: {result.warning}")
-    print(f"(Fusion threshold: {result.fusion_threshold:.3f})")
+    print(f"Reason     : {result.reason}")
+    print()
     print("----------------------------------------")
 
 
@@ -405,13 +441,6 @@ def main() -> int:
     device = resolve_device(args.device)
     input_path = Path(args.input_path).expanduser().resolve()
 
-    print(f"Device: {device}")
-    print(f"CNN model: {args.cnn_model}")
-    print(f"FFT model: {args.fft_model}")
-    print(f"Fusion bundle: {args.fusion_bundle}")
-    print(f"Face crop: {args.face_crop}")
-    print()
-
     # Load models and bundle once
     cnn_model, _cnn_meta = load_cnn_model(Path(args.cnn_model), device)
     fft_model, fft_arch = load_fft_checkpoint(Path(args.fft_model), device)
@@ -435,11 +464,6 @@ def main() -> int:
         )
 
     fusion_method = bundle.config.get("selected_fusion_method", bundle.selected_method)
-    print(
-        f"FFT arch: {fft_arch} | preprocess: {fft_cfg.channel_mode} @ {fft_cfg.image_size}px "
-        f"| fusion: {fusion_method} | threshold: {bundle.thresholds.default:.3f}"
-    )
-    print()
 
     try:
         image_paths = collect_input_paths(input_path)
