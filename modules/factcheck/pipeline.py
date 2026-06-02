@@ -24,12 +24,12 @@ Designed for graceful degradation:
 import os
 import tempfile
 
-from factcheck.transcriber      import transcribe
-from factcheck.claim_extractor  import extract_claims
-from factcheck.newsapi_checker  import get_newsapi_checker
-from factcheck.ddg_checker      import search_news as ddg_search_news
-from factcheck.semantic_verifier import check_contradiction
-from factcheck.harm_classifier  import classify as classify_harm, overall_misinfo_risk
+from modules.factcheck.transcriber      import transcribe
+from modules.factcheck.claim_extractor  import extract_claims
+from modules.factcheck.newsapi_checker  import get_newsapi_checker
+from modules.factcheck.ddg_checker      import search_news as ddg_search_news
+from modules.factcheck.semantic_verifier import check_contradiction
+from modules.factcheck.harm_classifier  import classify as classify_harm, overall_misinfo_risk
 
 
 def run_factcheck_pipeline(
@@ -80,7 +80,7 @@ def run_factcheck_pipeline(
 
     if audio_path is None:
         try:
-            from utils.video_utils import extract_audio, has_audio_track
+            from modules.core.video_utils import extract_audio, has_audio_track
             if not has_audio_track(media_path):
                 warnings.append("No audio track found in video.")
                 return result

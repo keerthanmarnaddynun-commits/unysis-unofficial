@@ -1,41 +1,64 @@
 {
-    "submission_id": "BS-FCF803BDC4D3",
-    "timestamp_utc": "2026-05-30T04:03:22.976401+00:00",
-    "timestamp_unix": 1780113802,
+    "submission_id": "BS-1CE0EF9ACFE6",
+    "timestamp_utc": "2026-06-02T08:50:42.094856+00:00",
+    "timestamp_unix": 1780390242,
     "file": {
-        "name": "fake_1.jpg",
-        "size_bytes": 127474,
-        "size_human": "124.5 KB",
+        "name": "test_image.jpg",
+        "size_bytes": 140126,
+        "size_human": "136.8 KB",
         "type": "jpg",
         "media_type": "image",
-        "sha256": "3cad456077b3a773447aad59df8e67395cd75e092680ccebbe937a70412cba07"
+        "sha256": "b8a5a4b30c65864c30449c048c8bc8566f5f62e47c8a402e8b8b5585519c1745"
     },
     "detection": {
         "label": "Real",
-        "confidence": 1.0,
-        "confidence_label": "Very High",
-        "fake_probability": 0.0,
+        "confidence": 0.7765,
+        "confidence_label": "High",
+        "fake_probability": 0.2235,
         "risk_level": "MINIMAL",
         "is_deepfake": false
     },
     "model_breakdown": {
-        "visual": {
-            "cnn_prob": 0.19931057598998111,
-            "fft_prob": 6.864689646281633e-09,
-            "fusion_prob": 8.136667020153254e-07,
-            "reliability": "LOW",
-            "ood_flags": [
-                "very_confident_real"
-            ]
+        "is_deepfake": false,
+        "risk_level": "MINIMAL",
+        "fake_probability": 0.2235,
+        "streams": {
+            "spatial_texture": {
+                "fake_prob": 0.0137,
+                "label": "Real"
+            },
+            "frequency_domain": {
+                "fake_prob": 0.5032,
+                "label": "Fake"
+            },
+            "temporal": {
+                "fake_prob": null,
+                "label": "N/A \u2014 image input"
+            },
+            "audio": {
+                "fake_prob": null,
+                "label": "N/A \u2014 no audio",
+                "available": false
+            },
+            "rppg": {
+                "has_pulse": null,
+                "bvp_snr": null,
+                "available": false,
+                "note": "rPPG requires video frames"
+            }
         }
     },
     "processing": {
-        "time_ms": 16395.0,
+        "time_ms": 367967.9,
         "system_name": "BharatShield Deepfake Detection System",
         "system_version": "2.0.0"
     },
     "integrity": {
-        "sha256": "3cad456077b3a773447aad59df8e67395cd75e092680ccebbe937a70412cba07",
+        "sha256": "b8a5a4b30c65864c30449c048c8bc8566f5f62e47c8a402e8b8b5585519c1745",
         "chain_of_custody": "BSA Section 63 compliant audit log entry created"
+    },
+    "fact_check": {
+        "available": false,
+        "note": "Fact-check not run."
     }
 }
