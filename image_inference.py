@@ -36,6 +36,8 @@ import sys
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 
+BRANCH_THRESHOLD = 0.5
+
 # Suppress prints during imports (e.g. Torch version from train_deepfake_detection.py)
 with open(os.devnull, "w") as f:
     old_stdout = sys.stdout
@@ -182,6 +184,18 @@ def run_cnn_branch(
     return BranchResult(logit=logit, prob_fake=prob, label=_label_from_prob(prob, THRESHOLD)), None, prep.face_detected, prep.image_np
 
 
+def jpeg95_normalize_for_fft(face_img: np.ndarray) -> Path:
+    from PIL import Image
+    out_path = Path("debug_fft_runtime_jpg95.jpg")
+    Image.fromarray(face_img).save(
+        out_path,
+        format="JPEG",
+        quality=95,
+        subsampling=0,
+    )
+    return out_path
+
+
 def run_fft_branch(
     fft_input: Path | np.ndarray,
     fft_model: nn.Module,
@@ -193,6 +207,8 @@ def run_fft_branch(
 ) -> BranchResult:
     if isinstance(fft_input, np.ndarray):
         print("DEBUG FFT input: face_crop")
+    elif isinstance(fft_input, Path) and fft_input.name == "debug_fft_runtime_jpg95.jpg":
+        print("DEBUG FFT input: jpeg95_normalized_crop")
     else:
         print("DEBUG FFT input: original_image")
     spectrum = preprocess_fft_image(
@@ -327,7 +343,10 @@ def infer_image(
     else:
         radial_mask = None
 
-    fft_input = face_img if (face_crop and face_img is not None) else image_path
+    if face_crop and face_img is not None:
+        fft_input = jpeg95_normalize_for_fft(face_img)
+    else:
+        fft_input = image_path
 
     fft_result = run_fft_branch(
         fft_input,
