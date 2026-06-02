@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Submitted — {{ app_name }}{% endblock %}
+{% block content %}
+<h1 class="page-title">Case submitted successfully</h1>
+<div class="alert show alert-success" style="margin-bottom:24px;">
+  Your legal evidence packet for <strong>{{ target_name }}</strong> has been generated and queued for review.
+</div>
+
+<div class="card">
+  <h2>Reference</h2>
+  <dl class="meta-grid">
+    <div class="meta-item"><dt>Packet ID</dt><dd><code>{{ packet_id }}</code></dd></div>
+    <div class="meta-item"><dt>Report ID</dt><dd><code>{{ report_id }}</code></dd></div>
+  </dl>
+</div>
+
+{% if documents %}
+<div class="card" style="margin-top:20px;">
+  <h2>Generated legal documents (PDF)</h2>
+  <p class="hint" style="margin-bottom:12px;">Download individual court-ready documents below.</p>
+  <ul class="doc-list">
+    {% for doc in documents %}
+    <li>
+      <a href="/files/{{ packet_id }}/{{ doc.filename }}" target="_blank" rel="noopener">
+        {{ doc.label }}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="action-row" style="margin-top:28px;">
+  <a class="btn" href="/submit">Submit another case</a>
+  <a class="btn btn-secondary" href="/">Back to home</a>
+</div>
+{% endblock %}

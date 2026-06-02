@@ -1,0 +1,102 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}Report — {{ app_name }}{% endblock %}
+{% block content %}
+<h1 class="page-title">{{ report.target_name or 'Authority report' }}</h1>
+<p class="page-sub">
+  <span class="badge badge-{{ report.status.value.split('_')[0] }}">{{ report.status.value }}</span>
+  &nbsp;·&nbsp; {{ report.case_type.value }}
+</p>
+
+<dl class="meta-grid">
+  <div class="meta-item"><dt>Report ID</dt><dd><code>{{ report.id }}</code></dd></div>
+  <div class="meta-item"><dt>Packet ID</dt><dd><code>{{ report.packet_id }}</code></dd></div>
+  <div class="meta-item"><dt>Identity source</dt><dd>{{ report.identity_source or '—' }}</dd></div>
+  <div class="meta-item"><dt>Zip SHA-256</dt><dd><code style="font-size:0.75rem;">{{ report.zip_sha256 }}</code></dd></div>
+</dl>
+
+{% if explanation and explanation.findings %}
+<div class="card">
+  <h2>Why classified as deepfake</h2>
+  <p style="color:var(--muted);margin-bottom:12px;">{{ explanation.summary }}</p>
+  <ul class="findings-list">
+    {% for f in explanation.findings %}
+    <li>
+      <strong>{{ f.category }}</strong> ({{ f.severity.value }})<br/>
+      {{ f.plain_language }}
+      {% if f.metric_ref %}<br/><em style="color:var(--muted);font-size:0.8rem;">{{ f.metric_ref }}: {{ f.value }}</em>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Charges</h2>
+  <p>{{ report.charges_summary }}</p>
+</div>
+
+<div class="card">
+  <h2>Authority channels</h2>
+  <table>
+    <thead><tr><th>Channel</th><th>Medium</th><th>Contact</th></tr></thead>
+    <tbody>
+      {% for ch in report.dispatch_instructions.recommended_channels %}
+      <tr>
+        <td><code>{{ ch.channel }}</code></td>
+        <td>{{ ch.medium }}</td>
+        <td><a href="{{ ch.endpoint }}" target="_blank" rel="noopener">{{ ch.endpoint }}</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Actions</h2>
+  <p style="color:var(--muted);font-size:0.88rem;margin-bottom:8px;">
+    Admin key is pre-configured for this demo environment.
+  </p>
+  <div class="action-row">
+    <button type="button" class="btn btn-success" id="btn-approve">Approve</button>
+    <button type="button" class="btn" id="btn-dispatch">Dispatch</button>
+    <button type="button" class="btn btn-secondary" id="btn-download">Download zip</button>
+  </div>
+  <div id="msg" class="alert"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const reportId = "{{ report.id }}";
+const adminKey = "{{ admin_api_key }}";
+const headers = { "X-Admin-Key": adminKey };
+
+function showMsg(text, ok) {
+  const el = document.getElementById("msg");
+  showAlert(el, text, ok ? "success" : "error");
+}
+
+document.getElementById("btn-approve").onclick = async () => {
+  const r = await fetch(`/api/v1/admin/reports/${reportId}/approve`, { method: "POST", headers });
+  const j = await r.json().catch(() => ({}));
+  showMsg(r.ok ? "Approved." : (j.detail || "Failed"), r.ok);
+  if (r.ok) setTimeout(() => location.reload(), 800);
+};
+
+document.getElementById("btn-dispatch").onclick = async () => {
+  const r = await fetch(`/api/v1/admin/reports/${reportId}/dispatch`, { method: "POST", headers });
+  const j = await r.json().catch(() => ({}));
+  showMsg(r.ok ? "Dispatched (simulated)." : (j.detail || "Failed"), r.ok);
+  if (r.ok) setTimeout(() => location.reload(), 1200);
+};
+
+document.getElementById("btn-download").onclick = async () => {
+  const r = await fetch(`/api/v1/admin/reports/${reportId}/download`, { headers });
+  if (!r.ok) { showMsg("Download failed", false); return; }
+  const blob = await r.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "evidence_{{ report.id[:8] }}.zip";
+  a.click();
+};
+</script>
+{% endblock %}

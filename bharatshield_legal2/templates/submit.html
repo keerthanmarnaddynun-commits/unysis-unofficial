@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}New case — {{ app_name }}{% endblock %}
+{% block content %}
+<h1 class="page-title">Submit new case</h1>
+<p class="page-sub">Enter politician details and attach evidence video (MP4 upload or direct link).</p>
+
+<form id="case-form" class="card" enctype="multipart/form-data" method="post" action="/submit">
+  <h2>Case details</h2>
+  <label>Politician name
+    <input type="text" name="politician_name" id="politician_name" value="{{ default_politician }}" required/>
+  </label>
+  <label>Role
+    <select name="role" id="role">
+      <option value="active_candidate" selected>Active electoral candidate</option>
+      <option value="public_figure">Public / political figure</option>
+      <option value="eci_official">ECI official</option>
+    </select>
+  </label>
+  <label>Party (optional) <input type="text" name="party_affiliation" value="{{ default_party }}"/></label>
+  <label>Constituency (optional) <input type="text" name="constituency" value="{{ default_constituency }}"/></label>
+  <label>Analyst notes
+    <input type="text" name="analyst_notes" value="{{ default_notes }}"/>
+  </label>
+
+  <h2 style="margin-top:24px;">Evidence video</h2>
+  <div class="media-tabs">
+    <label class="media-tab"><input type="radio" name="media_mode" value="none" checked/> No video (demo only)</label>
+    <label class="media-tab"><input type="radio" name="media_mode" value="file"/> Upload MP4 file</label>
+    <label class="media-tab"><input type="radio" name="media_mode" value="url"/> Video URL link</label>
+  </div>
+  <div id="panel-file" class="media-panel hidden">
+    <label>MP4 file
+      <input type="file" name="video_file" id="video_file" accept="video/mp4,.mp4"/>
+    </label>
+    <p class="hint">Max 100 MB. Only .mp4 format.</p>
+  </div>
+  <div id="panel-url" class="media-panel hidden">
+    <label>Video URL (http/https)
+      <input type="url" name="video_url" id="video_url" placeholder="https://example.com/evidence.mp4"/>
+    </label>
+    <p class="hint">Direct link to an MP4 file (must be publicly accessible).</p>
+  </div>
+
+  <input type="hidden" name="use_dummy_metrics" value="1"/>
+  <input type="hidden" name="metrics_json" value=""/>
+
+  <button type="submit" class="btn btn-success" id="submit-btn">Generate legal packet</button>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('input[name="media_mode"]').forEach(r => {
+  r.addEventListener("change", () => {
+    document.getElementById("panel-file").classList.toggle("hidden", r.value !== "file");
+    document.getElementById("panel-url").classList.toggle("hidden", r.value !== "url");
+  });
+});
+document.getElementById("case-form").addEventListener("submit", function() {
+  const btn = document.getElementById("submit-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Processing…';
+});
+</script>
+{% endblock %}

@@ -1,0 +1,106 @@
+{
+  "summary": "Media classified as likely synthetically manipulated based on 12 forensic indicator(s), including 4 high-severity finding(s).",
+  "findings": [
+    {
+      "category": "Audio-Video Sync",
+      "severity": "critical",
+      "plain_language": "Audio\u2013video lip movement is misaligned, consistent with synthetic dubbing or post-hoc voice replacement rather than naturally captured speech.",
+      "metric_ref": "lip_sync_alignment_error_ms",
+      "value": "127.5 ms",
+      "source": "rule_engine"
+    },
+    {
+      "category": "Facial Manipulation",
+      "severity": "high",
+      "plain_language": "Spatial facial inconsistencies detected across frames suggest GAN or deepfake-based facial manipulation.",
+      "metric_ref": "spatial_cnn_manipulation_probability",
+      "value": "94.00%",
+      "source": "rule_engine"
+    },
+    {
+      "category": "3D Face Geometry",
+      "severity": "medium",
+      "plain_language": "3D face mesh landmarks are unstable across the temporal sequence, indicating inconsistent facial geometry typical of synthetic faces.",
+      "metric_ref": "face_mesh_landmark_variance",
+      "value": "0.0823",
+      "source": "rule_engine"
+    },
+    {
+      "category": "Synthetic Voice",
+      "severity": "high",
+      "plain_language": "The voice track exhibits characteristics consistent with text-to-speech or neural voice cloning rather than a live recording.",
+      "metric_ref": "tts_synthetic_probability",
+      "value": "89.00%",
+      "source": "rule_engine"
+    },
+    {
+      "category": "Voice Authenticity",
+      "severity": "medium",
+      "plain_language": "Pitch contour and spectrogram features do not match natural speech patterns for the apparent speaker, suggesting audio synthesis or splicing.",
+      "metric_ref": "spectrogram_pitch_mismatch_ratio",
+      "value": "41.00%",
+      "source": "rule_engine"
+    },
+    {
+      "category": "Anti-Spoofing",
+      "severity": "high",
+      "plain_language": "Anti-spoofing neural network assigns low confidence to bona fide speech, indicating the audio is likely non-genuine or heavily processed.",
+      "metric_ref": "anti_spoofing_nn_confidence",
+      "value": "12.00%",
+      "source": "rule_engine"
+    },
+    {
+      "category": "Lighting Consistency",
+      "severity": "medium",
+      "plain_language": "Lighting on the face and background shifts unnaturally between frames, suggesting compositing or generative synthesis rather than a single capture.",
+      "metric_ref": "illumination_inconsistency_score",
+      "value": "72.00%",
+      "source": "ml_metric"
+    },
+    {
+      "category": "Shadow Geometry",
+      "severity": "medium",
+      "plain_language": "Shadow direction and softness are inconsistent with the scene light source, a common artifact in deepfake and face-swap videos.",
+      "metric_ref": "shadow_geometry_inconsistency_score",
+      "value": "68.00%",
+      "source": "ml_metric"
+    },
+    {
+      "category": "Color Grading",
+      "severity": "medium",
+      "plain_language": "Skin tone and color grading do not remain consistent across frames; color boundaries and shadows appear imperfect relative to natural video.",
+      "metric_ref": "color_grading_anomaly_score",
+      "value": "61.00%",
+      "source": "ml_metric"
+    },
+    {
+      "category": "Temporal Stability",
+      "severity": "medium",
+      "plain_language": "High-frequency flicker and temporal instability detected at facial boundaries, consistent with frame-wise generative manipulation.",
+      "metric_ref": "temporal_flicker_score",
+      "value": "58.00%",
+      "source": "ml_metric"
+    },
+    {
+      "category": "Facial Boundaries",
+      "severity": "medium",
+      "plain_language": "Visible artifacts at the jawline, hairline, or face perimeter suggest blending of a synthetic face onto an original body.",
+      "metric_ref": "facial_boundary_artifact_score",
+      "value": "64.00%",
+      "source": "ml_metric"
+    },
+    {
+      "category": "Analyst Observation",
+      "severity": "medium",
+      "plain_language": "Visible jawline blending; lighting on face inconsistent with background.",
+      "metric_ref": null,
+      "value": null,
+      "source": "analyst_note"
+    }
+  ],
+  "sources": [
+    "analyst_note",
+    "ml_metric",
+    "rule_engine"
+  ]
+}

@@ -1,0 +1,44 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}Dashboard — {{ app_name }}{% endblock %}
+{% block content %}
+<h1 class="page-title">Reports dashboard</h1>
+<p class="page-sub">Review, approve, and dispatch evidentiary packets to authorities.</p>
+
+<div class="action-row" style="margin-bottom:20px;">
+  <a class="btn btn-success" href="/admin/new-case">+ New case with video</a>
+</div>
+
+<div class="card" style="overflow-x:auto;">
+  <table>
+    <thead>
+      <tr>
+        <th>Target</th>
+        <th>Case type</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in reports %}
+      <tr>
+        <td>{{ r.target_name or '—' }}</td>
+        <td><code style="font-size:0.8rem;">{{ r.case_type.value }}</code></td>
+        <td>
+          {% set st = r.status.value.split('_')[0] %}
+          <span class="badge badge-{{ st }}">{{ r.status.value }}</span>
+        </td>
+        <td>{{ r.created_at.strftime('%d-%m-%Y %H:%M') if r.created_at else '' }}</td>
+        <td><a href="/admin/reports/{{ r.id }}">View →</a></td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">
+          No reports yet. <a href="/admin/new-case">Create a case</a>.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

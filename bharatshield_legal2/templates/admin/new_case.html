@@ -1,0 +1,47 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}New case — Admin{% endblock %}
+{% block content %}
+<h1 class="page-title">Create case (admin)</h1>
+<p class="page-sub">Full case workflow with MP4 upload or video URL. Uses demo forensic metrics.</p>
+
+<form class="card" id="admin-case-form" enctype="multipart/form-data" method="post" action="/admin/new-case">
+  <label>Politician name
+    <input type="text" name="politician_name" value="{{ default_politician }}" required/>
+  </label>
+  <label>Role
+    <select name="role">
+      <option value="active_candidate" selected>Active candidate</option>
+      <option value="public_figure">Public figure</option>
+      <option value="eci_official">ECI official</option>
+    </select>
+  </label>
+  <label>Party <input type="text" name="party_affiliation" value="{{ default_party }}"/></label>
+  <label>Constituency <input type="text" name="constituency" value="{{ default_constituency }}"/></label>
+  <label>Analyst notes <input type="text" name="analyst_notes" value="{{ default_notes }}"/></label>
+
+  <h2 style="margin-top:24px;">Evidence video</h2>
+  <div class="media-tabs">
+    <label class="media-tab"><input type="radio" name="media_mode" value="none" checked/> No video</label>
+    <label class="media-tab"><input type="radio" name="media_mode" value="file"/> Upload MP4</label>
+    <label class="media-tab"><input type="radio" name="media_mode" value="url"/> Video URL</label>
+  </div>
+  <div id="panel-file" class="media-panel hidden">
+    <label>MP4 file <input type="file" name="video_file" accept="video/mp4,.mp4"/></label>
+  </div>
+  <div id="panel-url" class="media-panel hidden">
+    <label>Video URL <input type="url" name="video_url" placeholder="https://.../file.mp4"/></label>
+  </div>
+
+  <button type="submit" class="btn btn-success">Generate legal packet</button>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('input[name="media_mode"]').forEach(r => {
+  r.addEventListener("change", () => {
+    document.getElementById("panel-file").classList.toggle("hidden", r.value !== "file");
+    document.getElementById("panel-url").classList.toggle("hidden", r.value !== "url");
+  });
+});
+</script>
+{% endblock %}
