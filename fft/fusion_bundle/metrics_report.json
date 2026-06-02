@@ -1,0 +1,92 @@
+{
+  "split_protocol": "option_b_val_only",
+  "notice": "split_protocol: option_b_val_only - Platt, fusion weights, and thresholds are fit on the same validation split used for base-model early stopping. Metrics may be slightly optimistic. For unbiased estimates, hold out a separate test set or use a dedicated fusion_cal split (Option A) in a future iteration.",
+  "n_samples": 9821,
+  "branches": {
+    "fft_uncalibrated": {
+      "auc": 0.9918414769049252,
+      "f1": 0.9667519181585678,
+      "acc": 0.9669076468791366,
+      "eer": 0.034110434083819995
+    },
+    "spatial_uncalibrated": {
+      "auc": 0.9959596310242738,
+      "f1": 0.9612218585738371,
+      "acc": 0.9601873536299765,
+      "eer": 0.030649938734090033
+    },
+    "fft_calibrated": {
+      "auc": 0.9918408755268485,
+      "f1": 0.9664019547953574,
+      "acc": 0.9663985337542002,
+      "eer": 0.034110434083819995
+    },
+    "spatial_calibrated": {
+      "auc": 0.9959596310242738,
+      "f1": 0.9699447965651196,
+      "acc": 0.970064148253742,
+      "eer": 0.030649938734090033
+    }
+  },
+  "fusion": {
+    "weighted": {
+      "w_spatial": 0.5,
+      "selection_auc": 0.9988056631400197,
+      "metrics": {
+        "auc": 0.9988056631400197,
+        "f1": 0.9870685266266165,
+        "acc": 0.9870685266266165,
+        "eer": 0.012625186178357615
+      }
+    },
+    "logistic": {
+      "coef_spatial": 0.8485768883751736,
+      "coef_fft": 0.7818221653459649,
+      "intercept": -0.8469469399909318,
+      "selection_auc": 0.9991410247349707,
+      "metrics": {
+        "auc": 0.9991410247349707,
+        "f1": 0.9883220651505839,
+        "acc": 0.988392220751451,
+        "eer": 0.011505917892067808
+      }
+    },
+    "selected": "logistic",
+    "selected_metrics": {
+      "auc": 0.9991410247349707,
+      "f1": 0.9883220651505839,
+      "acc": 0.988392220751451,
+      "eer": 0.011505917892067808
+    }
+  },
+  "thresholds": {
+    "config": {
+      "default": 0.6286868686868686,
+      "f1_threshold": 0.6286868686868686,
+      "f1_score": 0.9886924342105263,
+      "eer_threshold": 0.5927569270133972,
+      "eer_value": 0.011505917892067808,
+      "objective": "f1"
+    },
+    "metrics_at_thresholds": {
+      "@f1_threshold": {
+        "auc": 0.9991410247349707,
+        "f1": 0.9886924342105263,
+        "acc": 0.9887995112514001,
+        "eer": 0.011505917892067808
+      },
+      "@eer_threshold": {
+        "auc": 0.9991410247349707,
+        "f1": 0.9883971660334737,
+        "acc": 0.9884940433764382,
+        "eer": 0.011505917892067808
+      },
+      "@default": {
+        "auc": 0.9991410247349707,
+        "f1": 0.9886924342105263,
+        "acc": 0.9887995112514001,
+        "eer": 0.011505917892067808
+      }
+    }
+  }
+}

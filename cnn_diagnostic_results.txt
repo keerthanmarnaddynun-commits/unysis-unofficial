@@ -1,0 +1,229 @@
+================================================================================
+CNN DEEPFAKE DETECTION — DIAGNOSTIC RESULTS
+================================================================================
+Repository: D:\forsen
+Date: 2026-05-18
+Script: test_cnn.py (enhanced with --diagnose, --invert_output, --save_preprocessed)
+Model: training_output/best_model.pth
+Python used for runs: D:\envs\gpu_env\python.exe
+
+Training context (from user / training logs):
+  - Torch 2.5.1, Torchvision 0.20.1
+  - Dataset: final_dataset_aligned
+  - Train: 39284 images | Val: 9821 images
+  - Best val_auc ≈ 0.9960 | Final val_acc ≈ 0.9597
+  - Exported spatial scores: training_output/val_scores.npz
+
+================================================================================
+TASK 1 — LABEL MAPPING (train_deepfake_detection.py)
+================================================================================
+Source: train_deepfake_detection.py (NOT modified per task requirements)
+
+Convention (line 90 comment + collect_paths + checkpoint metadata):
+  - REAL = 0.0  (real/ subfolder)
+  - FAKE = 1.0  (fake/ subfolder)
+  - sigmoid(logit) = P(fake)
+  - Prediction: fake if P(fake) >= threshold (default 0.5) else real
+
+FocalLossSigmoid: positive class = fake (alpha=0.75 emphasizes fake class)
+validate_batched: scores = torch.sigmoid(logit), compared to y where fake=1
+
+Checkpoint best_model.pth metadata:
+  - best_val_auc: ~0.9955
+  - threshold: 0.5
+  - label_real: 0.0
+  - label_fake: 1.0
+  - architecture: efficientnet_b4_binary_sigmoid
+
+CONCLUSION: Labels are NOT reversed. sigmoid(logit) = probability of FAKE.
+
+================================================================================
+TASK 2 — TRAINING VAL INFERENCE vs test_cnn INFERENCE
+================================================================================
+Comparison points:
+  - Same model: EfficientNetB4Binary from best_model.pth (model_state_dict)
+  - Same transform: build_tta_post_normalize() = Normalize(ImageNet) + ToTensorV2
+  - Same score: sigmoid(logit) = P(fake)
+  - Same threshold: 0.5
+
+Val dataloader (training): PIL RGB uint8 380x380 -> Normalize + ToTensorV2 (no resize)
+test_cnn (aligned val paths): identical pipeline when face_crop=False, resize_if_not_380=False
+
+val_scores.npz logit cross-check (5 random val images):
+  ffhq_00752_e8610c25_1b2b5824ae.jpg:     export=-1.9141  test_cnn=-1.9121  diff=0.001953
+  processed_Celeb-DF_...jpg:              export=-1.3223  test_cnn=-1.3252  diff=0.002930
+  ffhq_06078_eb696deab7.jpg:              export=-1.9580  test_cnn=-1.9570  diff=0.000977
+  ffhq_51347_367f8039_fcee68cd48.jpg:     export=-2.7930  test_cnn=-2.7910  diff=0.001953
+  ffhq_35904_7beb4253_494013ccbb.jpg:     export=-1.3545  test_cnn=-1.3564  diff=0.001953
+  Mean |logit diff| on 5 samples: 0.001953 (fp16 numerical tolerance)
+
+CONCLUSION: test_cnn matches export_spatial_scores / validation inference. No model-load bug.
+
+================================================================================
+TASK 3 — --diagnose RESULTS (10 samples per group, --face_crop)
+================================================================================
+Command: D:\envs\gpu_env\python.exe test_cnn.py --diagnose --face_crop
+
+--- GROUP: final_dataset_aligned VAL real (380x380 pre-aligned) n=10 ---
+  fake_prob: mean=0.2164  min=0.0501  max=0.7197
+  accuracy (threshold=0.5): 0.9000  (9/10 correct)
+  IF INVERTED: mean_fake_prob=0.7836  accuracy=0.1000
+
+  Per-image highlights:
+    ffhq_00752...          gt=real  prob=0.0537  pred=real  logit=-2.869  [face_ok]
+    processed_Celeb-DF...  gt=real  prob=0.1897  pred=real  logit=-1.452  [face_ok]
+    ffhq_06078...          gt=real  prob=0.1467  pred=real  logit=-1.766  [face_ok]
+    ffhq_51347...          gt=real  prob=0.0501  pred=real  logit=-2.941  [face_ok]
+    ffhq_35904...          gt=real  prob=0.3104  pred=real  logit=-0.814  [face_ok]
+    (one val real misclassified as fake: prob=0.7197)
+
+  Sample source sizes: all 380x380
+
+--- GROUP: final_dataset_aligned VAL fake (380x380 pre-aligned) n=10 ---
+  fake_prob: mean=0.8066  min=0.6673  max=0.9752
+  accuracy (threshold=0.5): 1.0000  (10/10 correct)
+  IF INVERTED: mean_fake_prob=0.1934  accuracy=0.0000
+
+  Per-image highlights (all pred=fake, [face_ok]):
+    gan_fake_1550...       prob=0.9752  logit=+3.672
+    processed_dfdc...      prob=0.8875  logit=+1.997
+    gan_fake_4340...       prob=0.8502  logit=+1.734
+    gan_fake_3694...       prob=0.9407  logit=+2.783
+    min prob still 0.6673 -> all above threshold
+
+  Sample source sizes: all 380x380
+
+--- GROUP: test_images/real n=10 ---
+  fake_prob: mean=0.3959  min=0.0489  max=0.7413
+  accuracy (threshold=0.5): 0.6000  (6/10 correct)
+  IF INVERTED: mean_fake_prob=0.6041  accuracy=0.4000
+
+  Per-image:
+    real_3.jpg   gt=real  prob=0.6183  pred=FAKE  logit=+0.488  [face_ok]
+    real_4.jpg   gt=real  prob=0.7413  pred=FAKE  logit=+0.953  [face_ok]
+    real_7.jpg   gt=real  prob=0.5540  pred=FAKE  logit=+0.217  [face_ok]
+    real_8.jpg   gt=real  prob=0.5750  pred=FAKE  logit=+0.301  [face_ok]
+    real_15.jpg  gt=real  prob=0.6720  pred=FAKE  logit=+0.714  [face_ok]
+    real_10.jpg  gt=real  prob=0.4267  pred=real  logit=-0.295  [face_ok]
+    real_17.jpg  gt=real  prob=0.0730  pred=real  logit=-2.549  [face_ok]
+    real_6.png   gt=real  prob=0.1637  pred=real  logit=-1.629  [face_ok]
+
+  Sample source sizes (not pre-aligned):
+    real_3.jpg: 121x419
+    real_4.jpg: 927x528
+    real_10.jpg: 846x1068
+    real_17.jpg: 195x919
+    real_6.png: 1455x1090
+
+--- GROUP: test_images/fake n=10 ---
+  fake_prob: mean=0.1563  min=0.0478  max=0.2572
+  accuracy (threshold=0.5): 0.0000  (0/10 correct — ALL predicted REAL)
+  IF INVERTED: mean_fake_prob=0.8437  accuracy=1.0000
+
+  Per-image (ALL pred=real, [face_ok]):
+    fake_4.jpg   gt=fake  prob=0.1882  pred=real  logit=-1.457
+    fake_15.jpg  gt=fake  prob=0.1854  pred=real  logit=-1.480
+    fake_2.jpg   gt=fake  prob=0.0478  pred=real  logit=-2.997
+    fake_13.jpg  gt=fake  prob=0.2572  pred=real  logit=-1.061
+    fake_18.jpg  gt=fake  prob=0.2129  pred=real  logit=-1.310
+    fake_6.jpg   gt=fake  prob=0.1696  pred=real  logit=-1.589
+    fake_17.jpg  gt=fake  prob=0.0725  pred=real  logit=-2.549
+    fake_9.jpg   gt=fake  prob=0.1079  pred=real  logit=-2.119
+    fake_23.jpg  gt=fake  prob=0.0691  pred=real  logit=-2.599
+
+  Sample source sizes: all 1024x1024 (square AI-style portraits)
+
+================================================================================
+TASK 4 — DOMAIN / PREPROCESSING MISMATCH
+================================================================================
+Training data (final_dataset_aligned):
+  - 380x380 RGB JPEG
+  - MTCNN 5-point alignment, 30% box margin (create_final_dataset_aligned.py)
+  - Fake class: face-swap / deepfake manipulations in aligned face crops
+  - Real class: FFHQ, Celeb-DF, processed real faces, etc.
+
+test_images/:
+  - real/: full-frame photos, varied resolutions (e.g. 2967x2278, 846x1068)
+  - fake/: 1024x1024 images — appear to be full AI-generated portraits, NOT face-swap crops
+  - NOT the same distribution as training fakes
+
+Preprocessing modes tested on full test_images/ (43 labeled images):
+
+  A) --face_crop --skip_no_face
+     Accuracy: 0.3023
+     TP=0  TN=13  FP=6  FN=24
+     All fake folder images predicted REAL (TP=0)
+
+  B) No face_crop, no resize (--no_resize_if_not_380)
+     Accuracy: 0.3488
+     TP=0  TN=15  FP=4  FN=24
+
+  C) No face_crop, default resize to 380x380
+     Accuracy: 0.4186
+     TP=2  TN=16  FP=3  FN=22
+
+CONCLUSION: Poor test_images scores persist across preprocessing variants.
+             Primary issue = CONTENT DOMAIN (fake type + framing), not just missing crop.
+
+================================================================================
+TASK 5 — --invert_output ANALYSIS
+================================================================================
+On VAL aligned data (labels correct):
+  - Inverting would flip VAL fake accuracy 1.00 -> 0.00
+  - Inverting would flip VAL real accuracy 0.90 -> 0.10
+  -> DO NOT use --invert_output globally
+
+On test_images/fake only:
+  - Normal accuracy: 0.00 (model says REAL)
+  - Inverted accuracy: 1.00
+  -> Inversion "fixes" test fakes only because they systematically get LOW P(fake),
+     NOT because checkpoint labels are swapped
+
+On test_images/real:
+  - Normal accuracy: 0.60
+  - Inverted accuracy: 0.40
+  -> Inversion does NOT fix the full test set
+
+CONCLUSION: Label direction in model is correct. --invert_output is a diagnostic tool only.
+
+================================================================================
+TASK 6 — FEATURES ADDED TO test_cnn.py
+================================================================================
+  --diagnose              4 groups x 10 images, metrics + conclusions
+  --invert_output         Use P(real) = 1 - sigmoid(logit)
+  --save_preprocessed DIR Save uint8 RGB after crop/resize (before Normalize)
+  --resize_if_not_380     Default ON when not using face_crop
+  --no_resize_if_not_380  Pass native resolution (not recommended for test_images)
+  --face_crop             MTCNN align to 380x380 (matches dataset creation pipeline)
+  --skip_no_face          Skip images with no detected face
+
+================================================================================
+TASK 7 — ENVIRONMENT NOTES
+================================================================================
+Working environment:
+  D:\envs\gpu_env\python.exe
+  torch 2.5.1+cu121, facenet-pytorch, albumentations OK
+
+Problematic environments:
+  fft\fft_env — missing facenet-pytorch; D:\python_packages can shadow packages
+  fft_env with python -I — breaks train_deepfake_detection import (fixed via sys.path in test_cnn.py)
+  System Python 3.14 / D:\python_packages — PIL/torch conflicts
+
+Recommended commands:
+  D:\envs\gpu_env\python.exe test_cnn.py --diagnose --face_crop
+  D:\envs\gpu_env\python.exe test_cnn.py --input_dir test_images --face_crop --skip_no_face
+  D:\envs\gpu_env\python.exe test_cnn.py --input_dir test_images --face_crop --save_preprocessed debug_preprocessed/
+
+================================================================================
+OVERALL CONCLUSIONS
+================================================================================
+1. Model and inference pipeline are CORRECT on in-domain validation data.
+2. test_images poor accuracy (~30-42%) is NOT due to reversed labels or wrong checkpoint load.
+3. test_images/fake are scored as REAL (mean P(fake) ≈ 0.16) — domain shift.
+4. Use aligned 380x380 face-swap-style fakes for fair evaluation, or run
+   create_final_dataset_aligned.py on test data before inference.
+5. Do NOT apply --invert_output in production.
+
+================================================================================
+END OF REPORT
+================================================================================

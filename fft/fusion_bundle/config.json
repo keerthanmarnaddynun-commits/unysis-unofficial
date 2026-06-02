@@ -1,0 +1,13 @@
+{
+  "version": "1",
+  "created_utc": "2026-05-20T11:09:51.260670+00:00",
+  "split_protocol": "option_b_val_only",
+  "notice": "split_protocol: option_b_val_only - Platt, fusion weights, and thresholds are fit on the same validation split used for base-model early stopping. Metrics may be slightly optimistic. For unbiased estimates, hold out a separate test set or use a dedicated fusion_cal split (Option A) in a future iteration.",
+  "selected_fusion_method": "logistic",
+  "feature_order": [
+    "spatial_calibrated_z",
+    "fft_calibrated_z"
+  ],
+  "fft_scores_path": "fft_output/val_scores.npz",
+  "spatial_scores_path": "..\\training_output\\val_scores.npz"
+}

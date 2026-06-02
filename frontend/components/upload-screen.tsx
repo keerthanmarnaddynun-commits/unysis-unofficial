@@ -20,7 +20,7 @@ interface UploadScreenProps {
   mode: "file" | "url"
   initialUrl?: string
   onBack: () => void
-  onAnalyze: (sourceInfo: SourceInfo) => void
+  onAnalyze: (data: any) => void
 }
 
 type ProcessingStep = {
@@ -159,16 +159,14 @@ export function UploadScreen({ mode, initialUrl = "", onBack, onAnalyze }: Uploa
 
         const data = await analyzeFile(file)
 
-        // Pass result forward
+        // Pass raw backend response forward
         onAnalyze({
-          type: "file",
-          verified: false,
-          result: data.result,
-          confidence: data.confidence,
-          hash: data.hash,
-          timestamp: data.timestamp,
-          legal_notice: data.legal_notice
-        } as any)
+          ...data,
+          sourceInfo: {
+            type: "file",
+            verified: false
+          }
+        })
 
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : "Unknown error occurred";
@@ -206,7 +204,7 @@ export function UploadScreen({ mode, initialUrl = "", onBack, onAnalyze }: Uploa
     }
     
     setIsProcessing(false)
-    onAnalyze(sourceInfo)
+    onAnalyze({ sourceInfo })
   }
 
   const canProceed = mode === "file" ? file !== null : url.trim().length > 0

@@ -1,0 +1,12 @@
+{
+  "n_fft": 9821,
+  "n_spatial": 9821,
+  "n_joined": 9821,
+  "n_fft_only": 0,
+  "n_spatial_only": 0,
+  "duplicate_fft": 0,
+  "duplicate_spatial": 0,
+  "label_mismatches": 0,
+  "used_index_fallback": false,
+  "warnings": []
+}

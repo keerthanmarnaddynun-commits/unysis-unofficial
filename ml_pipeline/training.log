@@ -29,3 +29,4 @@
 2026-04-27 16:24:59,614 INFO New best validation accuracy: 0.9062
 2026-04-27 16:25:57,976 INFO Final Test Metrics: {'accuracy': 0.4768211920529801, 'precision': 0.4351851851851852, 'recall': 0.15562913907284767, 'f1': 0.22926829268292684}
 2026-04-27 16:25:58,310 INFO Saved final model to D:\forsen\ml_pipeline\models\model.pth
+

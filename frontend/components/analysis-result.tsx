@@ -10,38 +10,77 @@ interface AnalysisResultProps {
   onContinue: () => void
   onBack: () => void
   sourceInfo?: SourceInfo
+  data?: any
 }
 
-export function AnalysisResult({ onContinue, onBack, sourceInfo }: AnalysisResultProps) {
+export function AnalysisResult({ onContinue, onBack, sourceInfo, data }: AnalysisResultProps) {
   const [isPlaying, setIsPlaying] = useState(false)
 
-  const verdictData = {
-    verdict: "Likely Deepfake",
-    confidence: 87,
-    status: "fake" as "fake" | "real" | "uncertain",
-    timestamp: "0:12 - 0:18",
-  }
+  const confidenceValue = data?.confidence ? Math.round(data.confidence * 100) : 87;
+  const isFake = data?.final_prediction === "Fake";
 
-  const detectedIssues = [
-    {
+  const verdictData = (() => {
+    const finalPred = data?.final_prediction;
+    const reliability = data?.reliability;
+    if (finalPred === "Fake") {
+      return { verdict: "Likely Deepfake", confidence: confidenceValue, status: "fake" as const, timestamp: "N/A" };
+    }
+    if (finalPred === "Real") {
+      if (reliability === "HIGH") {
+        return { verdict: "Likely Authentic", confidence: confidenceValue, status: "real" as const, timestamp: "N/A" };
+      }
+      // LOW or other reliability -> uncertain
+      return { verdict: "Uncertain / Needs Review", confidence: confidenceValue, status: "uncertain" as const, timestamp: "N/A" };
+    }
+    return { verdict: "Unknown", confidence: confidenceValue, status: "uncertain" as const, timestamp: "N/A" };
+  })();
+
+  const detectedIssues = []
+  
+  if (data?.cnn_prediction === "FAKE") {
+    detectedIssues.push({
       icon: Image,
-      title: "Face inconsistency detected",
-      description: "Facial features show unnatural movements and blending artifacts",
+      title: "Spatial Anomalies (CNN)",
+      description: `Spatial model detected artifacts with ${(data.cnn_prob_fake * 100).toFixed(1)}% probability`,
       severity: "high",
-    },
-    {
-      icon: Volume2,
-      title: "Audio-video mismatch",
-      description: "Lip movements do not synchronize with speech patterns",
+    })
+  }
+  
+  if (data?.fft_prediction === "FAKE") {
+    detectedIssues.push({
+      icon: Image,
+      title: "Frequency Anomalies (FFT)",
+      description: `Frequency model detected AI upsampling artifacts with ${(data.fft_prob_fake * 100).toFixed(1)}% probability`,
       severity: "high",
-    },
-    {
-      icon: FileText,
-      title: "Metadata anomaly",
-      description: "File metadata indicates multiple editing sessions",
+    })
+  }
+  
+  if (data?.ood_flags && data.ood_flags.length > 0) {
+    detectedIssues.push({
+      icon: AlertCircle,
+      title: "Out of Distribution (OOD)",
+      description: `Flags: ${data.ood_flags.join(", ")}`,
       severity: "medium",
-    },
-  ]
+    })
+  }
+  
+  if (data?.reason) {
+    detectedIssues.push({
+      icon: FileText,
+      title: `Reliability: ${data.reliability || 'N/A'}`,
+      description: data.reason,
+      severity: data.reliability === "LOW" ? "high" : "medium",
+    })
+  }
+  
+  if (detectedIssues.length === 0 && !isFake) {
+    detectedIssues.push({
+      icon: CheckCircle,
+      title: "No manipulations detected",
+      description: "Both spatial and frequency models predict real content",
+      severity: "medium",
+    })
+  }
 
   const getVerdictColor = (status: "fake" | "real" | "uncertain") => {
     switch (status) {
@@ -131,7 +170,13 @@ export function AnalysisResult({ onContinue, onBack, sourceInfo }: AnalysisResul
                   <div className="flex flex-col gap-2 items-center md:items-start pt-1">
                     {/* Source Badge - positioned near verdict */}
                     <SourceBadge />
-                    
+                    {/* OOD warning badge */}
+                    {data?.ood_flags && data.ood_flags.length > 0 && (
+                      <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-100 border border-amber-300 rounded-full text-sm mt-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600" />
+                        <span className="text-amber-600">Out-of-Distribution Detected</span>
+                      </div>
+                    )}
                     {/* Public Impact Indicator */}
                     {verdictData.status === "real" ? (
                       <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-verdict-real/10 border border-verdict-real/20 rounded-full text-sm shadow-sm backdrop-blur-sm">
