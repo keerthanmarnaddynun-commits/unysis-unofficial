@@ -31,7 +31,15 @@ from ml.inference import predict_video
 from ml.model_loader import get_model
 from utils.legal import generate_legal_notice
 from utils.metadata import create_metadata
+from pymongo import MongoClient
+import certifi
+from pydantic import BaseModel
 
+
+from dotenv import load_dotenv
+from pathlib import Path
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 setup_logging()
 LOGGER = logging.getLogger(__name__)
@@ -103,6 +111,49 @@ def startup_event() -> None:
         "dataset_std": dataset_std,
         "radial_mask": radial_mask,
     })
+
+
+class LoginRequest(BaseModel):
+    role: str
+    identifier: str
+
+@app.post("/verify-login")
+async def verify_login(request: LoginRequest):
+    mongo_uri = os.getenv("MONGO_URI")
+    db_name = os.getenv("MONGO_DB", "unisys_project")
+    
+    if not mongo_uri:
+        raise HTTPException(status_code=500, detail="Database configuration missing")
+        
+    try:
+        client = MongoClient(mongo_uri, tlsCAFile=certifi.where())
+        db = client[db_name]
+        collection = db["authorized_ids"]
+        
+        role = request.role.strip().lower()
+        identifier = request.identifier.strip()
+        
+        doc = collection.find_one({
+            "role": role,
+            "official_id": identifier,
+            "status": "active"
+        })
+        
+        if doc:
+            return {
+                "valid": True,
+                "user": {
+                    "role": doc.get("role"),
+                    "official_id": doc.get("official_id"),
+                    "name": doc.get("name"),
+                    "organization": doc.get("organization")
+                }
+            }
+        else:
+            return {"valid": False, "message": "Invalid ID for selected role."}
+    except Exception as exc:
+        LOGGER.exception("Login verification failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Database connection error")
 
 
 @app.post("/predict/video")
