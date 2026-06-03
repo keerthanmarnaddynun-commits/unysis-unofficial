@@ -1,0 +1,72 @@
+{
+  "@context": {
+    "@vocab": "https://icjs.gov.in/esakshya/vocab#",
+    "schema": "https://schema.org/"
+  },
+  "@type": "ElectronicEvidenceBundle",
+  "sakshyaIdentificationNumber": "5069132005682440",
+  "portalUrl": "https://icjs.gov.in/esakshya/",
+  "packetId": "f361d9d7-186a-416b-afb6-2f59f2e30e93",
+  "submissionTimestampIST": "2026-06-01T19:17:00.486181+05:30",
+  "primaryEvidenceHashSHA256": "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+  "bundleHashSHA256": "a0aadefe1609483a936faa77e7a665183fe12c39665f697df030594dd51769cc",
+  "declarant": {
+    "analystId": "ANL-2026-0042",
+    "workstationSerial": "WS-IND-FORENSIC-9912",
+    "terminalMac": "00:1A:2B:3C:4D:5E"
+  },
+  "subject": {
+    "identified": true,
+    "fullName": "Priya Sharma",
+    "identityId": "candidate-042"
+  },
+  "legalRouting": {
+    "caseType": "case_b_active_candidate",
+    "takedownHours": 3,
+    "charges": [
+      {
+        "statute": "Representation of the People Act, 1951",
+        "section": "123(4)",
+        "description": "Corrupt practice to prejudice an election through false statements"
+      },
+      {
+        "statute": "Bharatiya Nyaya Sanhita, 2023",
+        "section": "356",
+        "description": "Criminal defamation through morphed/synthetic media"
+      },
+      {
+        "statute": "Bharatiya Nyaya Sanhita, 2023",
+        "section": "336",
+        "description": "Forgery of electronic records to cheat"
+      }
+    ]
+  },
+  "certificates": [
+    {
+      "type": "bsa_section_63_part_a",
+      "filename": "BSA_Section63_PartA_User_Declaration.pdf",
+      "sha256": "b8c200a51f6dd21302c158b7888591e088adf862131dab7b2c4938fb93cbcd5a"
+    },
+    {
+      "type": "bsa_section_63_part_b",
+      "filename": "BSA_Section63_PartB_Expert_Certification.pdf",
+      "sha256": "c196cf32cb5331847e088fb80accc3e6666a4fb7bab1cb5d4e3ebe147bdcf187"
+    },
+    {
+      "type": "rpa_eci_corrupt_practice_complaint",
+      "filename": "RPA_Section123_4_ECI_Complaint.pdf",
+      "sha256": "814c532d4e26eef616e1c998f18e5df029b9210360cdd3112c1c0c4c66f8c737"
+    },
+    {
+      "type": "it_rules_2026_intermediary_takedown_3h",
+      "filename": "IT_Rules_2026_Intermediary_Takedown_3H.pdf",
+      "sha256": "ef6ee492e5659e12068123915a4c2804ddd6e350559877ebdf4bfa8795410d4b"
+    },
+    {
+      "type": "draft_fir_bns",
+      "filename": "Draft_FIR_BNS.pdf",
+      "sha256": "a4a80dd0e7785df0ef5dba5da75c1b3d0e321e2adee5520fa7bca9c910e68c57"
+    }
+  ],
+  "uploadInstructions": "Login to eSakshya at https://icjs.gov.in/esakshya/ \u2192 New Submission \u2192 Enter SID \u2192 Upload evidentiary zip \u2192 Attach JSON metadata."
+}

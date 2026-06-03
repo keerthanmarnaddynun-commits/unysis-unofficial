@@ -26,6 +26,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+import mps_patch
 # ── Config ────────────────────────────────────────────────────
 from config import (
     UPLOAD_FOLDER,
@@ -48,6 +49,8 @@ from modules.metadata_analysis.hashing  import (
     verify_audit_chain,
     generate_submission_id,
 )
+from pymongo import MongoClient
+import certifi
 
 # ── ML pipeline ───────────────────────────────────────────────
 from modules.core.ensemble import run_detection
@@ -294,6 +297,50 @@ def _process_file(file_path: str) -> dict:
     )
 
     return response
+
+
+class LoginRequest(BaseModel):
+    role: str
+    identifier: str
+
+
+@app.post("/verify-login")
+async def verify_login(request: LoginRequest):
+    mongo_uri = os.getenv("MONGO_URI")
+    db_name = os.getenv("MONGO_DB", "unisys_project")
+    
+    if not mongo_uri:
+        raise HTTPException(status_code=500, detail="Database configuration missing")
+        
+    try:
+        client = MongoClient(mongo_uri, tlsCAFile=certifi.where())
+        db = client[db_name]
+        collection = db["authorized_ids"]
+        
+        role = request.role.strip().lower()
+        identifier = request.identifier.strip()
+        
+        doc = collection.find_one({
+            "role": role,
+            "official_id": identifier,
+            "status": "active"
+        })
+        
+        if doc:
+            return {
+                "valid": True,
+                "user": {
+                    "role": doc.get("role"),
+                    "official_id": doc.get("official_id"),
+                    "name": doc.get("name"),
+                    "organization": doc.get("organization")
+                }
+            }
+        else:
+            return {"valid": False, "message": "Invalid ID for selected role."}
+    except Exception as exc:
+        LOGGER.exception("Login verification failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Database connection error")
 
 
 # ─────────────────────────────────────────────────────────────

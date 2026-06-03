@@ -47,6 +47,11 @@ function MainApp() {
     setCurrentScreen("analysis")
   }
 
+  const handleLogout = () => {
+    setUserRole(null)
+    setCurrentScreen("landing")
+  }
+
   if (!userRole) {
     return <LoginPage onLogin={handleLogin} />
   }
@@ -60,6 +65,7 @@ function MainApp() {
           onUrlClick={() => navigateTo("upload-url")}
           onDemoClick={handleDemo}
           onHowItWorksClick={() => navigateTo("how-it-works")}
+          onLogout={handleLogout}
         />
       )}
 

@@ -5,20 +5,23 @@ import json
 
 random.seed(42)
 
-real_imgs = []
-fake_imgs = []
+def get_images(folder, count):
+    imgs = []
+    for root, dirs, files in os.walk(folder):
+        for f in files:
+            if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                imgs.append(os.path.join(root, f))
+    return random.sample(imgs, count)
 
-with open(r'D:\forsen\sampled_images.txt', 'r') as f:
-    for line in f:
-        line = line.strip()
-        if not line:
-            continue
-        label, path = line.split('|', 1)
-        if label == 'REAL':
-            real_imgs.append(path)
-        elif label == 'FAKE':
-            fake_imgs.append(path)
-print("Loaded evaluation images from sampled_images.txt")
+real_imgs = get_images(r'D:\forsen\final_dataset\real', 500)
+fake_imgs = get_images(r'D:\forsen\final_dataset\fake', 500)
+
+with open(r'D:\forsen\sampled_images_1000.txt', 'w') as f:
+    for p in real_imgs:
+        f.write(f"REAL|{p}\n")
+    for p in fake_imgs:
+        f.write(f"FAKE|{p}\n")
+print("Sampled 1000 images and saved to sampled_images_1000.txt")
 
 results = []
 
@@ -70,6 +73,6 @@ print("Running FAKE...")
 for p in fake_imgs:
     run_inf(p, 'FAKE')
 
-with open('eval_results.json', 'w') as f:
+with open(r'D:\forsen\eval_results_1000_jpeg95.json', 'w') as f:
     json.dump(results, f, indent=2)
 print("Done!")

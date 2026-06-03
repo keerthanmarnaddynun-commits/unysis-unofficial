@@ -29,7 +29,14 @@ IMAGE_SIZE = (224, 224)
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def get_device() -> torch.device:
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+DEVICE = get_device()
 
 
 def setup_logging() -> None:

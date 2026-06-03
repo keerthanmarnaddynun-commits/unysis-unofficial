@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{% block title %}Admin — {{ app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/app.css"/>
+  {% block head %}{% endblock %}
+</head>
+<body class="admin-body">
+  <div class="layout">
+    <nav class="navbar admin-navbar">
+      <a class="navbar-brand" href="/admin">Bharat<span>Shield</span> <em style="font-weight:400;color:var(--warn);font-style:normal;">Admin</em></a>
+      <ul class="nav-links">
+        <li><a href="/admin" {% if active_nav == 'dashboard' %}class="active"{% endif %}>Dashboard</a></li>
+        <li><a href="/admin/new-case" {% if active_nav == 'new_case' %}class="active"{% endif %}>New case + video</a></li>
+        <li><a href="/">← Public site</a></li>
+      </ul>
+    </nav>
+    {% block content %}{% endblock %}
+  </div>
+  <script src="/static/js/app.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

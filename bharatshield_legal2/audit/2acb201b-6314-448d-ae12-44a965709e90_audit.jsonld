@@ -1,0 +1,30 @@
+{
+  "@context": {
+    "@vocab": "https://bharatshield.local/audit#",
+    "schema": "https://schema.org/"
+  },
+  "@type": "ChainOfCustodyLog",
+  "packetId": "2acb201b-6314-448d-ae12-44a965709e90",
+  "entries": [
+    {
+      "timestamp": "2026-06-02T10:00:26.406055+05:30",
+      "action": "packet_compilation_started",
+      "actor": "DEMO-ANALYST-001",
+      "file_hash": "b94d27b9934d3e08a52e52d7da7dae55cfe5f806fb7c93f00039b7c69b6c4220",
+      "details": {
+        "packet_id": "2acb201b-6314-448d-ae12-44a965709e90",
+        "merge_conflicts": []
+      }
+    },
+    {
+      "timestamp": "2026-06-02T10:00:26.449203+05:30",
+      "action": "zip_sealed",
+      "actor": "DEMO-ANALYST-001",
+      "file_hash": "5a4e639b60c5f0ea6ad1b371e4cde09fe11b113e2c626d58999c5c205b1ffcc7",
+      "details": {
+        "zip_path": "C:\\Users\\srujan\\Downloads\\smp\\bharatshield_legal2\\output\\2acb201b-6314-448d-ae12-44a965709e90\\evidentiary_packet_2acb201b-6314-448d-ae12-44a965709e90.zip"
+      }
+    }
+  ],
+  "finalPackageHash": "5a4e639b60c5f0ea6ad1b371e4cde09fe11b113e2c626d58999c5c205b1ffcc7"
+}

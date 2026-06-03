@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Home — {{ app_name }}{% endblock %}
+{% block content %}
+<h1 class="page-title">Legal evidence pipeline</h1>
+<p class="page-sub">
+  Generate court-ready deepfake evidentiary packets with politician targeting,
+  forensic explanations, and statutory documents.
+</p>
+
+<div class="grid-3">
+  <div class="tile">
+    <h3>New case</h3>
+    <p>Submit a case with politician details and upload MP4 video or paste a video link.</p>
+    <a class="btn" href="/submit">Start submission</a>
+  </div>
+  <div class="tile">
+    <h3>Admin portal</h3>
+    <p>Review reports, approve dispatch, and create cases with video evidence.</p>
+    <a class="btn btn-secondary" href="/admin">Open admin</a>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Quick demo</h2>
+  <p style="color:var(--muted);font-size:0.9rem;margin-bottom:12px;">Uses placeholder forensic values (no video required).</p>
+  <form id="home-demo-form">
+    <label>Politician name
+      <input type="text" id="home-politician" value="Shri Demo Politician" required/>
+    </label>
+    <label>Role
+      <select id="home-role">
+        <option value="active_candidate" selected>Active electoral candidate</option>
+        <option value="public_figure">Public figure</option>
+        <option value="eci_official">ECI official</option>
+      </select>
+    </label>
+    <button type="submit" class="btn btn-success" id="home-demo-btn">Generate packet</button>
+    <div id="home-alert" class="alert"></div>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById("home-demo-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById("home-demo-btn");
+  const alert = document.getElementById("home-alert");
+  setLoading(btn, true);
+  alert.className = "alert";
+  try {
+    const data = await apiDemoGenerate(
+      document.getElementById("home-politician").value.trim(),
+      document.getElementById("home-role").value
+    );
+    const target = encodeURIComponent(
+      (data.identity && (data.identity.display_name || data.identity.subject_id)) || "Subject"
+    );
+    window.location.href =
+      "/submit/success?packet_id=" +
+      encodeURIComponent(data.packet_id) +
+      "&report_id=" +
+      encodeURIComponent(data.authority_report_id) +
+      "&target=" +
+      target;
+  } catch (err) {
+    showAlert(alert, err.message, "error");
+    setLoading(btn, false);
+  }
+});
+</script>
+{% endblock %}
