@@ -104,6 +104,7 @@ function MainApp() {
       {currentScreen === "role-output" && userRole && (
         <RoleBasedOutput
           userRole={userRole}
+          sourceUrl={initialUrl}
           onAction={() => navigateTo("confirmation")}
           onBack={() => navigateTo("analysis")}
         />
