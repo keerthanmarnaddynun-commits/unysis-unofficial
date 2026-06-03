@@ -7,7 +7,7 @@ import { UploadScreen } from "@/components/upload-screen"
 import { AnalysisResult } from "@/components/analysis-result"
 import { RoleBasedOutput } from "@/components/role-based-output"
 import { ActionConfirmation } from "@/components/action-confirmation"
-import { LoginPage, type Role } from "@/components/login-page"
+import { LoginPage, type Role, getStoredUser } from "@/components/login-page"
 import HowItWorksPage from "./how-it-works/page"
 
 type Screen = "landing" | "upload-file" | "upload-url" | "analysis" | "role-output" | "confirmation" | "how-it-works"
@@ -34,7 +34,22 @@ function MainApp() {
     }
   }, [sourceUrl])
 
-  const handleLogin = (role: Role) => {
+  useEffect(() => {
+    const user = getStoredUser()
+
+    if (user && user.role) {
+      setUserRole(user.role as Role)
+    }
+  }, [])
+
+  const handleLogin = (role: Role, user: any) => {
+    const userToSave = { ...user, role }
+
+    localStorage.setItem(
+      "bharatshield_user",
+      JSON.stringify(userToSave)
+    )
+
     setUserRole(role)
   }
 
