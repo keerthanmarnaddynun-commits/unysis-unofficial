@@ -13,25 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export type Role = "Citizen" | "Journalist" | "Police" | "Authority"
 
 interface LoginPageProps {
-  onLogin: (role: Role, user: any) => void
-}
-
-export function getStoredUser() {
-  if (typeof window === "undefined") return null
-  const stored = localStorage.getItem("bharatshield_user")
-  if (!stored) return null
-  try {
-    return JSON.parse(stored)
-  } catch {
-    return null
-  }
+  onLogin: (role: Role) => void
 }
 
 export function LoginPage({ onLogin }: LoginPageProps) {
   const [role, setRole] = useState<Role>("Citizen")
   const [identifier, setIdentifier] = useState("")
-  const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
 
   const getPlaceholder = (selectedRole: Role) => {
     switch (selectedRole) {
@@ -43,34 +30,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     }
   }
 
-  const handleContinue = async (e: FormEvent) => {
+  const handleContinue = (e: FormEvent) => {
     e.preventDefault()
-    setError(null)
-
     if (identifier.trim()) {
-      setIsLoading(true)
-      try {
-        const res = await fetch("http://localhost:8000/verify-login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role, identifier: identifier.trim() })
-        })
-        
-        if (!res.ok) {
-          throw new Error("Server error during verification")
-        }
-        
-        const data = await res.json()
-        if (data.valid) {
-          onLogin(role, data.user)
-        } else {
-          setError(data.message || "Invalid ID for selected role.")
-        }
-      } catch (err) {
-        setError("Failed to verify login. Please try again.")
-      } finally {
-        setIsLoading(false)
-      }
+      onLogin(role)
     }
   }
 
@@ -119,12 +82,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               />
             </div>
 
-            {error && (
-              <p className="text-sm text-destructive font-medium">{error}</p>
-            )}
-
-            <Button type="submit" className="w-full text-base py-5 mt-4" disabled={isLoading}>
-              {isLoading ? "Verifying..." : "Continue"}
+            <Button type="submit" className="w-full text-base py-5 mt-4">
+              Continue
             </Button>
 
             <p className="text-center text-sm text-muted-foreground pt-4">

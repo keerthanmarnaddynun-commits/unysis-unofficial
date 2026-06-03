@@ -1,6 +1,6 @@
 "use client"
 
-import { Shield, Upload, Link, Play, ArrowRight, CheckCircle, Search, Scale, FileWarning } from "lucide-react"
+import { Shield, Upload, Link, Play, ArrowRight, CheckCircle, Search, Scale, FileWarning, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import NextLink from "next/link"
@@ -12,9 +12,10 @@ interface LandingPageProps {
   onUrlClick: () => void
   onDemoClick: () => void
   onHowItWorksClick: () => void
+  onLogout: () => void
 }
 
-export function LandingPage({ userRole, onUploadClick, onUrlClick, onDemoClick, onHowItWorksClick }: LandingPageProps) {
+export function LandingPage({ userRole, onUploadClick, onUrlClick, onDemoClick, onHowItWorksClick, onLogout }: LandingPageProps) {
   const steps = [
     { icon: Upload, label: "Upload", description: "Submit media" },
     { icon: Search, label: "Analyze", description: "AI verification" },
@@ -43,8 +44,17 @@ export function LandingPage({ userRole, onUploadClick, onUrlClick, onDemoClick, 
           </div>
           
           {/* Row 2 */}
-          <div className="flex items-center">
+          <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground/80 font-medium">Logged in as: {userRole}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onLogout}
+              className="text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-1.5 h-7 px-2"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Logout
+            </Button>
           </div>
         </div>
       </header>
