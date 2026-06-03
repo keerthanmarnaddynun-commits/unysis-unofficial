@@ -72,7 +72,7 @@ export async function analyzeFile(file: File, timeoutMs: number = 300000): Promi
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch("http://127.0.0.1:5001/analyze", {
+    const response = await fetch("http://127.0.0.1:8000/analyze", {
       method: "POST",
       body: formData,
       signal: controller.signal,

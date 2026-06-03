@@ -13,6 +13,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+import mps_patch
 from image_inference import (
     resolve_device, load_cnn_model, load_fft_checkpoint, load_fusion_bundle,
     get_transform, load_fft_run_config, load_stats, build_radial_emphasis_mask, infer_image,
