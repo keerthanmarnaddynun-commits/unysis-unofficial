@@ -1,9 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { 
+import {
   ArrowLeft,
   Shield,
+  ShieldAlert,
   Search,
   RefreshCw,
   FileText,
@@ -27,14 +28,15 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { 
-  listReports, 
-  getReport, 
-  updateReportStatus, 
-  reanalyzeReport, 
-  generateReportLegalDocs, 
+import {
+  listReports,
+  getReport,
+  updateReportStatus,
+  reanalyzeReport,
+  generateReportLegalDocs,
   getLegalDocDownloadUrl,
-  type Report 
+  sendTakedownNotice,
+  type Report
 } from "../src/api"
 
 interface AuthorityDashboardProps {
@@ -64,6 +66,7 @@ export function AuthorityDashboard({
   const [reanalyzing, setReanalyzing] = useState(false)
   const [generatingDocs, setGeneratingDocs] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [sendingTakedown, setSendingTakedown] = useState(false)
   
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [searchQuery, setSearchQuery] = useState("")
@@ -205,6 +208,34 @@ export function AuthorityDashboard({
       })
     } finally {
       setUpdatingStatus(false)
+    }
+  }
+
+  // Handle send takedown notice
+  const handleSendTakedown = async () => {
+    if (!selectedReport) return
+    setSendingTakedown(true)
+    try {
+      const res = await sendTakedownNotice(selectedReport.report_id)
+      if (res.success) {
+        toast({
+          title: "Takedown Notice Sent",
+          description: "Legal takedown notice sent to VibeStream admin panel.",
+        })
+        // Refresh details
+        await handleSelectReport(selectedReport.report_id)
+        // Refresh list
+        fetchReports()
+      }
+    } catch (err: any) {
+      console.error(err)
+      toast({
+        variant: "destructive",
+        title: "Takedown Notice Failed",
+        description: err.message || "Failed to send takedown notice to VibeStream.",
+      })
+    } finally {
+      setSendingTakedown(false)
     }
   }
 
@@ -575,7 +606,7 @@ export function AuthorityDashboard({
                             <div className="font-semibold text-white truncate">{doc.document_type}</div>
                             <div className="text-[10px] text-slate-500 font-mono truncate">{doc.filename}</div>
                           </div>
-                          <a 
+                          <a
                             href={downloadUrl}
                             target="_blank"
                             rel="noopener noreferrer"
@@ -589,6 +620,70 @@ export function AuthorityDashboard({
                   </CardContent>
                 </Card>
               )}
+
+              {/* Takedown Notice to VibeStream */}
+              <Card className="bg-gradient-to-r from-red-950/20 to-[#0f172a] border-[#1e293b] p-6 space-y-4">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-red-400" />
+                  <span>VibeStream Content Takedown</span>
+                </h3>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-400">Takedown Status:</span>
+                    {selectedReport.takedown_status ? (
+                      <span className={`font-semibold px-2 py-0.5 rounded ${
+                        selectedReport.takedown_status === "sent"
+                          ? "bg-emerald-500/10 text-emerald-400"
+                          : selectedReport.takedown_status === "failed"
+                          ? "bg-red-500/10 text-red-400"
+                          : "bg-amber-500/10 text-amber-400"
+                      }`}>
+                        {selectedReport.takedown_status.toUpperCase()}
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">Not sent</span>
+                    )}
+                  </div>
+
+                  {selectedReport.takedown_response?.sent_at && (
+                    <div className="text-[10px] text-slate-500">
+                      Sent at: {new Date(selectedReport.takedown_response.sent_at).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  {selectedReport.takedown_status === "sent" ? (
+                    <Button
+                      variant="outline"
+                      disabled
+                      className="border-emerald-500/30 text-emerald-400 min-w-[180px]"
+                    >
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Notice Sent
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleSendTakedown}
+                      disabled={sendingTakedown}
+                      className="bg-red-600 hover:bg-red-700 text-white min-w-[180px]"
+                    >
+                      {sendingTakedown ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <ShieldAlert className="w-4 h-4 mr-2" />
+                          Send Takedown Notice
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </Card>
 
               {/* Custody Log */}
               <Card className="bg-[#0f172a] border-[#1e293b]">

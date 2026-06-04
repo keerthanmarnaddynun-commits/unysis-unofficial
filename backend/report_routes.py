@@ -351,3 +351,89 @@ async def download_document(report_id: str, packet_id: str, filename: str):
 
     return FileResponse(file_path, filename=safe_name, media_type="application/pdf")
 
+
+@router.post("/{report_id}/send-takedown")
+async def send_takedown_notice(report_id: str):
+    """Send a legal takedown notice to VibeStream admin panel."""
+    svc = _get_service()
+    report = await svc.get_report(report_id)
+    if not report:
+        raise HTTPException(404, "Report not found")
+
+    analysis = report.get("analysis", {})
+    media_hash = report.get("media_hash", "")
+    media_filename = report.get("media_filename", "unknown")
+    prediction = analysis.get("final_prediction") or analysis.get("prediction", "Unknown")
+    confidence = analysis.get("confidence", 0.0)
+
+    # Get legal packet ID if available
+    legal_packet_id = None
+    if report.get("legal_documents") and len(report["legal_documents"]) > 0:
+        legal_packet_id = report["legal_documents"][0].get("packet_id")
+
+    # Build takedown notice payload
+    takedown_payload = {
+        "sourceUrl": f"http://localhost:4001/api/get-content?postId={report_id}",
+        "caseId": report_id,
+        "mediaHash": media_hash,
+        "legalPacketId": legal_packet_id,
+        "prediction": prediction,
+        "confidence": confidence,
+        "reason": f"Deepfake detected with {confidence:.2%} confidence - Legal notice generated under IT Rules 2026",
+        "reportId": report_id
+    }
+
+    try:
+        # Send to VibeStream backend
+        import httpx
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                "http://localhost:4001/api/takedown",
+                json=takedown_payload
+            )
+            response.raise_for_status()
+            vibestream_response = response.json()
+
+        # Update report with takedown status
+        await svc.update_takedown_status(
+            report_id,
+            "sent",
+            {
+                "sent_at": datetime.now(IST).isoformat(),
+                "vibestream_response": vibestream_response,
+                "payload": takedown_payload
+            }
+        )
+
+        return JSONResponse(content={
+            "success": True,
+            "message": "Takedown notice sent to VibeStream successfully",
+            "takedown_status": "sent",
+            "vibestream_response": vibestream_response
+        })
+
+    except httpx.HTTPStatusError as e:
+        logger.error("VibeStream takedown API error: %s", e)
+        await svc.update_takedown_status(
+            report_id,
+            "failed",
+            {
+                "sent_at": datetime.now(IST).isoformat(),
+                "error": str(e),
+                "payload": takedown_payload
+            }
+        )
+        raise HTTPException(502, f"Failed to send takedown notice to VibeStream: {e}")
+    except Exception as exc:
+        logger.exception("Takedown notice send failed: %s", exc)
+        await svc.update_takedown_status(
+            report_id,
+            "failed",
+            {
+                "sent_at": datetime.now(IST).isoformat(),
+                "error": str(exc),
+                "payload": takedown_payload
+            }
+        )
+        raise HTTPException(500, f"Takedown notice send failed: {exc}")
+

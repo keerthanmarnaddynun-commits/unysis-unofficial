@@ -1,3 +1,6 @@
 [submodule "vibestream-demo"]
 	path = vibestream-demo
 	url = https://github.com/Srujanmp1366/vibestream-demo
+[submodule "DeepfakeBench"]
+	path = DeepfakeBench
+	url = https://github.com/SCLBD/DeepfakeBench

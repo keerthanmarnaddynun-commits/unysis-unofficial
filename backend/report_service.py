@@ -259,6 +259,36 @@ class ReportService:
             return None
         return self._serialize_report(result)
 
+    async def update_takedown_status(
+        self,
+        report_id: str,
+        status: str,
+        response_data: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Update takedown status and response data for a report."""
+        now = _now_ist()
+        result = await self._db.reports.find_one_and_update(
+            {"report_id": report_id},
+            {
+                "$set": {
+                    "takedown_status": status,
+                    "takedown_response": response_data,
+                    "updated_at": now,
+                },
+                "$push": {
+                    "custody_log": {
+                        "time": now.isoformat(),
+                        "event": f"Takedown notice {status}",
+                        "actor": "Authority",
+                    }
+                },
+            },
+            return_document=True,
+        )
+        if not result:
+            return None
+        return self._serialize_report(result)
+
     # --- Serialization ---
 
     def _serialize_report(self, doc: dict) -> dict[str, Any]:

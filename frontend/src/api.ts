@@ -127,6 +127,13 @@ export interface Report {
   reanalysis_history?: ReanalysisItem[];
   legal_documents?: LegalDocument[];
   admin_notes?: string | null;
+  takedown_status?: string | null;
+  takedown_response?: {
+    sent_at?: string;
+    vibestream_response?: any;
+    payload?: any;
+    error?: string;
+  } | null;
 }
 
 const BACKEND_BASE_URL = "http://127.0.0.1:8000";
@@ -236,4 +243,19 @@ export async function generateReportLegalDocs(
 
 export function getLegalDocDownloadUrl(reportId: string, packetId: string, filename: string): string {
   return `${BACKEND_BASE_URL}/api/reports/${reportId}/documents/${packetId}/${filename}`;
+}
+
+export async function sendTakedownNotice(
+  reportId: string
+): Promise<{ success: boolean; message: string; takedown_status: string; vibestream_response?: any }> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/reports/${reportId}/send-takedown`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(errorData.detail || `Failed to send takedown notice: ${response.status}`);
+  }
+
+  return response.json();
 }
