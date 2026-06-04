@@ -1,0 +1,191 @@
+{
+  "@context": {
+    "@vocab": "https://icjs.gov.in/esakshya/vocab#",
+    "schema": "https://schema.org/"
+  },
+  "@type": "ElectronicEvidenceBundle",
+  "sakshyaIdentificationNumber": "7386006825291536",
+  "portalUrl": "https://icjs.gov.in/esakshya/",
+  "packetId": "b4226ca5-e237-4b83-8ace-050bc1ff1a66",
+  "submissionTimestampIST": "2026-06-04T21:03:08.077753+05:30",
+  "primaryEvidenceHashSHA256": "b94d27b9934d3e08a52e52d7da7dae55cfe5f806fb7c93f00039b7c69b6c4220",
+  "bundleHashSHA256": "71f8e774565c1d22bf81541866ad1b8ae3c16e85fae3dbbb791aa27ca30aadc4",
+  "declarant": {
+    "analystId": "DEMO-ANALYST-001",
+    "workstationSerial": "DEMO-WS-2026-0001",
+    "terminalMac": "00:11:22:33:44:55"
+  },
+  "subject": {
+    "identified": true,
+    "displayName": "Shri Demo Politician",
+    "fullName": "Shri Demo Politician",
+    "identityId": "candidate-042",
+    "identitySource": "hybrid",
+    "biometricMatched": true
+  },
+  "forensicNarrative": {
+    "summary": "Media classified as likely synthetically manipulated based on 12 forensic indicator(s), including 4 high-severity finding(s).",
+    "findings": [
+      {
+        "category": "Audio-Video Sync",
+        "severity": "critical",
+        "plain_language": "Audio\u2013video lip movement is misaligned, consistent with synthetic dubbing or post-hoc voice replacement rather than naturally captured speech.",
+        "metric_ref": "lip_sync_alignment_error_ms",
+        "value": "135.0 ms",
+        "source": "rule_engine"
+      },
+      {
+        "category": "Facial Manipulation",
+        "severity": "high",
+        "plain_language": "Spatial facial inconsistencies detected across frames suggest GAN or deepfake-based facial manipulation.",
+        "metric_ref": "spatial_cnn_manipulation_probability",
+        "value": "92.00%",
+        "source": "rule_engine"
+      },
+      {
+        "category": "3D Face Geometry",
+        "severity": "medium",
+        "plain_language": "3D face mesh landmarks are unstable across the temporal sequence, indicating inconsistent facial geometry typical of synthetic faces.",
+        "metric_ref": "face_mesh_landmark_variance",
+        "value": "0.0750",
+        "source": "rule_engine"
+      },
+      {
+        "category": "Synthetic Voice",
+        "severity": "high",
+        "plain_language": "The voice track exhibits characteristics consistent with text-to-speech or neural voice cloning rather than a live recording.",
+        "metric_ref": "tts_synthetic_probability",
+        "value": "88.00%",
+        "source": "rule_engine"
+      },
+      {
+        "category": "Voice Authenticity",
+        "severity": "medium",
+        "plain_language": "Pitch contour and spectrogram features do not match natural speech patterns for the apparent speaker, suggesting audio synthesis or splicing.",
+        "metric_ref": "spectrogram_pitch_mismatch_ratio",
+        "value": "39.00%",
+        "source": "rule_engine"
+      },
+      {
+        "category": "Anti-Spoofing",
+        "severity": "high",
+        "plain_language": "Anti-spoofing neural network assigns low confidence to bona fide speech, indicating the audio is likely non-genuine or heavily processed.",
+        "metric_ref": "anti_spoofing_nn_confidence",
+        "value": "11.00%",
+        "source": "rule_engine"
+      },
+      {
+        "category": "Lighting Consistency",
+        "severity": "medium",
+        "plain_language": "Lighting on the face and background shifts unnaturally between frames, suggesting compositing or generative synthesis rather than a single capture.",
+        "metric_ref": "illumination_inconsistency_score",
+        "value": "71.00%",
+        "source": "ml_metric"
+      },
+      {
+        "category": "Shadow Geometry",
+        "severity": "medium",
+        "plain_language": "Shadow direction and softness are inconsistent with the scene light source, a common artifact in deepfake and face-swap videos.",
+        "metric_ref": "shadow_geometry_inconsistency_score",
+        "value": "66.00%",
+        "source": "ml_metric"
+      },
+      {
+        "category": "Color Grading",
+        "severity": "medium",
+        "plain_language": "Skin tone and color grading do not remain consistent across frames; color boundaries and shadows appear imperfect relative to natural video.",
+        "metric_ref": "color_grading_anomaly_score",
+        "value": "59.00%",
+        "source": "ml_metric"
+      },
+      {
+        "category": "Temporal Stability",
+        "severity": "medium",
+        "plain_language": "High-frequency flicker and temporal instability detected at facial boundaries, consistent with frame-wise generative manipulation.",
+        "metric_ref": "temporal_flicker_score",
+        "value": "55.00%",
+        "source": "ml_metric"
+      },
+      {
+        "category": "Facial Boundaries",
+        "severity": "medium",
+        "plain_language": "Visible artifacts at the jawline, hairline, or face perimeter suggest blending of a synthetic face onto an original body.",
+        "metric_ref": "facial_boundary_artifact_score",
+        "value": "62.00%",
+        "source": "ml_metric"
+      },
+      {
+        "category": "Analyst Observation",
+        "severity": "medium",
+        "plain_language": "Dummy run: lip-sync mismatch; inconsistent lighting and shadows on face.",
+        "metric_ref": null,
+        "value": null,
+        "source": "analyst_note"
+      }
+    ],
+    "sources": [
+      "analyst_note",
+      "ml_metric",
+      "rule_engine"
+    ]
+  },
+  "legalRouting": {
+    "caseType": "case_b_active_candidate",
+    "takedownHours": 3,
+    "charges": [
+      {
+        "statute": "Representation of the People Act, 1951",
+        "section": "123(4)",
+        "description": "Corrupt practice to prejudice an election through false statements"
+      },
+      {
+        "statute": "Bharatiya Nyaya Sanhita, 2023",
+        "section": "356",
+        "description": "Criminal defamation through morphed/synthetic media"
+      },
+      {
+        "statute": "Bharatiya Nyaya Sanhita, 2023",
+        "section": "336",
+        "description": "Forgery of electronic records to cheat"
+      }
+    ]
+  },
+  "certificates": [
+    {
+      "type": "complete_legal_evidence_packet",
+      "filename": "Complete_Legal_Evidence_Packet.pdf",
+      "sha256": "66566a2f48669de95dd3d02a99edcf3949a9732ddb6fb2617f8cf611d2ca5522"
+    },
+    {
+      "type": "bsa_section_63_part_a",
+      "filename": "BSA_Section63_PartA_User_Declaration.pdf",
+      "sha256": "49110efc45c6f7f51b7d5fa3f72b8b34a5ff48b583d538ae6c08efbe3175cc21"
+    },
+    {
+      "type": "bsa_section_63_part_b",
+      "filename": "BSA_Section63_PartB_Expert_Certification.pdf",
+      "sha256": "47f76df51920f6752a5b3e927e1fe1704d81cd0eb3450289729381ecad78d246"
+    },
+    {
+      "type": "rpa_eci_corrupt_practice_complaint",
+      "filename": "RPA_Section123_4_ECI_Complaint.pdf",
+      "sha256": "28789ab3c7621da5ec8960e526c3378a3433976bf2843a5d5ff7f817001c725a"
+    },
+    {
+      "type": "it_rules_2026_intermediary_takedown_3h",
+      "filename": "IT_Rules_2026_Intermediary_Takedown_3H.pdf",
+      "sha256": "979e9e71c7ad69e831fb29a391d9e6a97d6be95dcb026d5bfc3928a50f53b8fe"
+    },
+    {
+      "type": "draft_fir_bns",
+      "filename": "Draft_FIR_BNS.pdf",
+      "sha256": "0dfd2f35fe38e6e8042d51660b34f6ea608fbd941d929ac75592b71095b2d9d1"
+    },
+    {
+      "type": "deepfake_forensic_summary",
+      "filename": "Deepfake_Forensic_Summary.pdf",
+      "sha256": "6924b6926e5cb94137d6babda04d7b630e8ea7b9a8d49731c31fad8de569ebe7"
+    }
+  ],
+  "uploadInstructions": "Login to eSakshya at https://icjs.gov.in/esakshya/ \u2192 New Submission \u2192 Enter SID \u2192 Upload evidentiary zip \u2192 Attach JSON metadata."
+}

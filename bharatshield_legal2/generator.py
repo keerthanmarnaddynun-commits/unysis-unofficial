@@ -1,18 +1,28 @@
-"""Module 4: Jinja2 document generation and PDF compilation."""
+"""Module 4: ReportLab document generation and PDF compilation."""
 
 from __future__ import annotations
 
+import base64
+from datetime import datetime, timezone, timedelta
 import hashlib
 import logging
-import uuid
-from datetime import datetime, timezone, timedelta
+import os
 from pathlib import Path
+import random
 from typing import Any
 
-from jinja2 import Environment, BaseLoader, select_autoescape
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+    HRFlowable, PageBreak, KeepTogether
+)
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+from reportlab.platypus import Flowable
 
 from config import settings
-from pdf_render import html_to_pdf
 from schemas import (
     AcousticForensics,
     DeepfakeExplanation,
@@ -28,10 +38,8 @@ logger = logging.getLogger(__name__)
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
-
 def _now_ist() -> datetime:
     return datetime.now(IST)
-
 
 def _format_ist(dt: datetime | None = None) -> str:
     dt = dt or _now_ist()
@@ -41,369 +49,820 @@ def _format_ist(dt: datetime | None = None) -> str:
         dt = dt.astimezone(IST)
     return dt.strftime("%d-%m-%Y %H:%M:%S IST")
 
-
 def _subject_name(identity: ResolvedIdentity) -> str:
     return identity.display_name or (identity.profile.full_name if identity.profile else "Unknown")
 
+# ─────────────────────────────────────────────
+# COLOUR PALETTE (formal print-safe from legal_1)
+# ─────────────────────────────────────────────
+NAVY       = colors.HexColor("#1F1F1F")
+ACCENT     = colors.HexColor("#3A3A3A")
+LIGHT_BLUE = colors.HexColor("#EFEFEF")
+DANGER     = colors.HexColor("#6A1B1B")
+SUCCESS    = colors.HexColor("#1E8449")
+WARNING    = colors.HexColor("#B7770D")
+GRAY_DARK  = colors.HexColor("#202020")
+GRAY_MID   = colors.HexColor("#555555")
+GRAY_LIGHT = colors.HexColor("#F5F5F5")
+WHITE      = colors.white
+BLACK      = colors.black
 
-EXPLANATION_GROUNDS_HTML = """
-{% if explanation and explanation.findings %}
-<h3>Grounds for Deepfake Classification</h3>
-<p><strong>Summary:</strong> {{ explanation.summary }}</p>
-<ul>
-  {% for f in explanation.findings %}
-  <li><strong>{{ f.category }} ({{ f.severity.value }}):</strong> {{ f.plain_language }}
-      {% if f.metric_ref %}<em>({{ f.metric_ref }}: {{ f.value }})</em>{% endif %}
-  </li>
-  {% endfor %}
-</ul>
-{% endif %}
-"""
+def build_styles():
+    def S(name, **kw):
+        return ParagraphStyle(name, **kw)
 
-# --- Legal HTML templates (embedded per spec) ---
+    return {
+        "doc_title":    S("doc_title",    fontName="Times-Bold",   fontSize=16, textColor=NAVY,
+                           alignment=TA_CENTER, spaceBefore=2, spaceAfter=6, leading=20),
+        "doc_subtitle": S("doc_subtitle", fontName="Times-Roman",        fontSize=10, textColor=GRAY_MID,
+                           alignment=TA_CENTER, spaceAfter=14, leading=14),
+        "section_head": S("section_head", fontName="Times-Bold",   fontSize=10.5, textColor=NAVY,
+                           alignment=TA_LEFT,   spaceBefore=12, spaceAfter=6, borderWidth=0,
+                           borderColor=WHITE, leftIndent=0, rightIndent=0),
+        "field_label":  S("field_label",  fontName="Times-Bold",   fontSize=8.8, textColor=GRAY_MID,
+                           spaceBefore=4, spaceAfter=1),
+        "field_value":  S("field_value",  fontName="Times-Roman",        fontSize=10, textColor=GRAY_DARK,
+                           spaceAfter=3, leading=14),
+        "body":         S("body",         fontName="Times-Roman",        fontSize=10.4, textColor=GRAY_DARK,
+                           leading=15.5,  alignment=TA_JUSTIFY,        spaceAfter=7),
+        "bullet":       S("bullet",       fontName="Times-Roman",        fontSize=9.9, textColor=GRAY_DARK,
+                           leftIndent=16, spaceAfter=4, leading=14.5),
+        "verdict_text": S("verdict_text", fontName="Times-Bold",   fontSize=13, textColor=DANGER,
+                           alignment=TA_CENTER, spaceBefore=5, spaceAfter=5),
+        "footer_text":  S("footer_text",  fontName="Times-Italic",fontSize=8,  textColor=GRAY_MID,
+                           alignment=TA_CENTER),
+        "mono":         S("mono",         fontName="Courier",          fontSize=8.3, textColor=GRAY_DARK,
+                           leading=12.5),
+        "warning_box":  S("warning_box",  fontName="Times-Bold",   fontSize=9,  textColor=WARNING,
+                           alignment=TA_CENTER),
+        "table_header": S("table_header", fontName="Times-Bold",   fontSize=9.2, textColor=WHITE),
+        "table_cell":   S("table_cell",   fontName="Times-Roman",        fontSize=9.2, textColor=GRAY_DARK,
+                           leading=13.5),
+        "ref_num":      S("ref_num",      fontName="Courier-Bold",     fontSize=9.5, textColor=ACCENT),
+    }
 
-TEMPLATE_BSA_PART_A = """
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"/><title>Schedule to Section 63 BSA 2023 — Part A</title>
-<style>
-  body { font-family: 'Times New Roman', serif; font-size: 11pt; margin: 2cm; color: #000; }
-  h1 { font-size: 14pt; text-align: center; text-transform: uppercase; }
-  h2 { font-size: 12pt; border-bottom: 1px solid #000; }
-  table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-  td, th { border: 1px solid #000; padding: 6px 8px; vertical-align: top; }
-  th { background: #f0f0f0; width: 35%; text-align: left; }
-  .footer { margin-top: 24px; font-size: 10pt; }
-  .sig-line { border-top: 1px solid #000; width: 240px; margin-top: 48px; }
-</style>
-</head>
-<body>
-<h1>Schedule to Section 63 of the Bharatiya Sakshya Adhiniyam, 2023</h1>
-<h2>Part A — Certificate by Person in Control of Computer / Device (User/Owner Declaration)</h2>
-<p>I, the undersigned, being the person in lawful control of the computer resource or electronic device from which the electronic record was produced, hereby certify as follows:</p>
-<table>
-  <tr><th>1. Full Name of Declarant</th><td>{{ analyst_display_name }}</td></tr>
-  <tr><th>2. Analyst / Operator ID</th><td>{{ system.analyst_id }}</td></tr>
-  <tr><th>3. Place of Certification</th><td>{{ place }}</td></tr>
-  <tr><th>4. Date &amp; Time (IST)</th><td>{{ ist_timestamp }}</td></tr>
-  <tr><th>5. Lawful Control Statement</th><td>I affirm that I was in lawful possession and control of the workstation/device identified below at the time of acquisition of the electronic record, and that the record was obtained without alteration of its substantive content.</td></tr>
-  <tr><th>6. Workstation Serial No.</th><td>{{ system.workstation_serial_number }}</td></tr>
-  <tr><th>7. Terminal MAC Address</th><td>{{ system.terminal_mac_address }}</td></tr>
-  <tr><th>8. IMEI / Mobile Identifier (if applicable)</th><td>{{ imei or 'N/A' }}</td></tr>
-  <tr><th>9. Original File Name</th><td>{{ file.filename }}</td></tr>
-  <tr><th>10. Container Format</th><td>{{ file.container_format }}</td></tr>
-  <tr><th>11. File Size (bytes)</th><td>{{ file.file_size_bytes }}</td></tr>
-  <tr><th>12. SHA-256 Hash (original)</th><td><code>{{ file.sha256_hash }}</code></td></tr>
-  <tr><th>13. Ingestion Timestamp (UTC stored / IST displayed)</th><td>{{ ingestion_ist }}</td></tr>
-</table>
-<p>I understand that any false statement in this certificate may attract penal consequences under applicable law. This certificate is issued for production of electronic evidence before a Court, Tribunal, or authority in accordance with Section 63 of the Bharatiya Sakshya Adhiniyam, 2023.</p>
-<div class="footer">
-  <div class="sig-line"></div>
-  <p>Signature of Declarant: _________________________ &nbsp; Date: {{ ist_date }}</p>
-  <p>Page 1 of 1 | Packet ID: {{ packet_id }}</p>
-</div>
-</body>
-</html>
-"""
+class HeaderBanner(Flowable):
+    """Draws a formal legal-document header block."""
+    def __init__(self, doc_type_label, ref_number, classification="RESTRICTED – LAW ENFORCEMENT USE ONLY"):
+        super().__init__()
+        self.doc_type_label  = doc_type_label
+        self.ref_number      = ref_number
+        self.classification  = classification
+        self.width           = A4[0] - 40*mm
+        self.height          = 38*mm
 
-TEMPLATE_BSA_PART_B = """
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"/><title>Schedule to Section 63 BSA 2023 — Part B</title>
-<style>
-  body { font-family: 'Times New Roman', serif; font-size: 11pt; margin: 2cm; }
-  h1 { font-size: 14pt; text-align: center; text-transform: uppercase; }
-  table { width: 100%; border-collapse: collapse; }
-  td, th { border: 1px solid #000; padding: 6px; }
-  th { background: #f0f0f0; width: 38%; }
-</style>
-</head>
-<body>
-<h1>Schedule to Section 63 of the Bharatiya Sakshya Adhiniyam, 2023</h1>
-<h2>Part B — Technical Expert Certification (Section 79A, IT Act authorised expert)</h2>
-<table>
-  <tr><th>Expert Name &amp; Designation</th><td>{{ expert_name }} — Digital Forensic Examiner (Sec 79A IT Act)</td></tr>
-  <tr><th>Expert ID / Licence</th><td>{{ expert_id }}</td></tr>
-  <tr><th>Verification Workstation Serial</th><td>{{ system.workstation_serial_number }}</td></tr>
-  <tr><th>Verification MAC</th><td>{{ system.terminal_mac_address }}</td></tr>
-  <tr><th>Independent SHA-256 Confirmation</th><td><code>{{ file.sha256_hash }}</code> (verified match)</td></tr>
-  <tr><th>Date &amp; Time of Examination (IST)</th><td>{{ ist_timestamp }}</td></tr>
-</table>
-<h3>Forensic Analysis Summary</h3>
-<p>The electronic record identified above was extracted using write-protected forensic procedures. Structural integrity of the bitstream was preserved. No transcoding or lossy re-encoding was applied during acquisition.</p>
-<ul>
-  <li>Spatial CNN manipulation probability: <strong>{{ "%.4f"|format(visual.spatial_cnn_manipulation_probability) }}</strong></li>
-  <li>3D face mesh landmark variance: <strong>{{ "%.6f"|format(visual.face_mesh_landmark_variance) }}</strong></li>
-  <li>Lip-sync alignment error: <strong>{{ "%.2f"|format(visual.lip_sync_alignment_error_ms) }} ms</strong></li>
-  <li>TTS synthetic voice probability: <strong>{{ "%.4f"|format(acoustic.tts_synthetic_probability) }}</strong></li>
-  <li>Spectrogram pitch mismatch ratio: <strong>{{ "%.4f"|format(acoustic.spectrogram_pitch_mismatch_ratio) }}</strong></li>
-  <li>Anti-spoofing NN confidence (bona fide): <strong>{{ "%.4f"|format(acoustic.anti_spoofing_nn_confidence) }}</strong></li>
-</ul>
-{% if identity.matched or subject_name %}
-<p><strong>Resolved Subject:</strong> {{ subject_name }}{% if identity.identity_id %} (ID: {{ identity.identity_id }}{% if identity.fused_similarity %}, fused similarity: {{ "%.4f"|format(identity.fused_similarity) }}{% endif %}){% endif %}
- — source: {{ identity.identity_source.value }}{% if identity.merge_conflicts %} — note: {{ identity.merge_conflicts|join('; ') }}{% endif %}</p>
-{% else %}
-<p><strong>Resolved Subject:</strong> Not matched above biometric threshold.</p>
-{% endif %}
-""" + EXPLANATION_GROUNDS_HTML + """
-<p>I certify that the above analysis was conducted on the hash-verified original and that the opinions expressed are based on validated multi-modal deepfake detection models.</p>
-<div class="sig-line" style="border-top:1px solid #000;width:240px;margin-top:40px;"></div>
-<p>Expert Signature: _________________________ &nbsp; Date: {{ ist_date }}</p>
-<p>Page 1 of 1 | Packet ID: {{ packet_id }}</p>
-</body>
-</html>
-"""
+    def draw(self):
+        c = self.canv
+        w, h = self.width, self.height
 
-TEMPLATE_IT_TAKEDOWN = """
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"/><title>IT Amendment Rules 2026 — Intermediary Notice</title>
-<style>
-  body { font-family: 'Times New Roman', serif; font-size: 11pt; margin: 2cm; }
-  .header { text-align: right; } table { border-collapse: collapse; width: 100%; }
-  td, th { border: 1px solid #000; padding: 8px; }
-</style>
-</head>
-<body>
-<p class="header">Date: {{ ist_date }}<br/>Ref: {{ packet_id }}/IT-Rules-2026</p>
-<p><strong>To,</strong><br/>The Grievance Officer / Nodal Compliance Officer<br/>[Intermediary Social Media Platform]<br/>India</p>
-<p><strong>Subject:</strong> Statutory Notice for Removal of Synthetically Generated Information — Rule 3(1)(b), IT Amendment Rules, 2026 ({{ takedown_hours }}-Hour Compliance Window)</p>
-<p>Sir/Madam,</p>
-<p>Under Rule 3(1)(b) of the Information Technology (Intermediary Guidelines and Digital Media Ethics Code) Amendment Rules, 2026, you are hereby notified that the following content hosted on your platform constitutes synthetically generated / morphed information prejudicial to {% if routing.case_type.value == 'case_a_eci_official' %}constitutional election processes{% elif routing.case_type.value == 'case_b_active_candidate' %}free and fair elections{% else %}public order and individual dignity{% endif %}.</p>
-<table>
-  <tr><th>Content URL / Identifier</th><td>As per annexure hash {{ file.sha256_hash[:16] }}…</td></tr>
-  <tr><th>SHA-256 of Media</th><td><code>{{ file.sha256_hash }}</code></td></tr>
-  <tr><th>Mandated Removal Window</th><td><strong>{{ takedown_hours }} hours</strong> from service of this notice (deadline: {{ deadline_ist }})</td></tr>
-  <tr><th>Applicable Offences</th><td>{% for c in routing.charges %}{{ c.statute }} §{{ c.section }}; {% endfor %}</td></tr>
-</table>
-<p>Failure to disable access within the stipulated period may attract safe-harbour forfeiture and referral to competent authorities including ECI / Cyber Crime Coordination Centre.</p>
-<p>Yours faithfully,<br/><strong>BharatShield Legal Automation</strong><br/>On behalf of the complainant</p>
-</body>
-</html>
-"""
+        # Outer formal border
+        c.setStrokeColor(ACCENT)
+        c.setLineWidth(0.8)
+        c.rect(0, 0, w, h, stroke=1, fill=0)
 
-TEMPLATE_ECI_CONTEMPT = """
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"/><title>ECI Contempt Notice — Article 324</title>
-<style>body{font-family:'Times New Roman',serif;font-size:11pt;margin:2cm;} h1{text-align:center;font-size:14pt;}</style>
-</head>
-<body>
-<h1>Notice of Contempt / Obstruction — Election Commission of India</h1>
-<p><strong>Under:</strong> Article 324 of the Constitution of India; Model Code of Conduct; Bharatiya Nyaya Sanhita §319</p>
-<p>The Commission is respectfully informed that synthetically generated media targeting <strong>{{ subject_name }}</strong>, an official performing election duties, has been detected with forensic confidence exceeding evidentiary thresholds.</p>
-<p>Requested Action: Immediate regulatory direction, preservation of platform logs, and initiation of contempt proceedings where applicable.</p>
-<p>Packet: {{ packet_id }} | Hash: {{ file.sha256_hash }} | {{ ist_timestamp }}</p>
-</body>
-</html>
-"""
+        # Top line and government-style heading
+        c.setStrokeColor(NAVY)
+        c.setLineWidth(1.0)
+        c.line(0, h - 8*mm, w, h - 8*mm)
 
-TEMPLATE_RPA_COMPLAINT = """
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"/><title>RPA Section 123(4) Complaint</title>
-<style>body{font-family:'Times New Roman',serif;margin:2cm;} table{border-collapse:collapse;width:100%;} td,th{border:1px solid #000;padding:6px;}</style>
-</head>
-<body>
-<h1 style="text-align:center;">Complaint under Section 123(4), Representation of the People Act, 1951</h1>
-<p><strong>To:</strong> The Election Commission of India, Nirvachan Sadan, New Delhi</p>
-<table>
-  <tr><th>Impugned Candidate</th><td>{{ subject_name }}</td></tr>
-  <tr><th>Constituency</th><td>{{ identity.electoral.constituency or 'N/A' }}</td></tr>
-  <tr><th>Party</th><td>{{ identity.electoral.party_affiliation or 'N/A' }}</td></tr>
-  <tr><th>Nature of Corrupt Practice</th><td>Publication of deepfake/synthetic audiovisual material to prejudice election outcome</td></tr>
-  <tr><th>Evidence Hash</th><td><code>{{ file.sha256_hash }}</code></td></tr>
-</table>
-<p>Complainant prays for immediate regulatory action, takedown directions, and investigation under RPA and BNS.</p>
-<p>Date: {{ ist_date }} | Ref: {{ packet_id }}</p>
-</body>
-</html>
-"""
+        c.setFillColor(NAVY)
+        c.setFont("Times-Bold", 11)
+        c.drawString(6*mm, h - 6*mm, "GOVERNMENT OF INDIA")
+        c.setFont("Times-Roman", 8.5)
+        c.drawString(6*mm, h - 11*mm, "BharatShield National Deepfake Detection and Response Platform")
 
-TEMPLATE_DRAFT_FIR = """
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"/><title>Draft FIR — BNS</title>
-<style>body{font-family:'Times New Roman',serif;margin:2cm;font-size:11pt;} table{border-collapse:collapse;width:100%;} td,th{border:1px solid #000;padding:6px;}</style>
-</head>
-<body>
-<h1 style="text-align:center;">DRAFT FIRST INFORMATION REPORT</h1>
-<p><strong>Police Station:</strong> _________________________ &nbsp; <strong>District:</strong> _________________________</p>
-<table>
-  <tr><th>Offences</th><td>{% for c in routing.charges %}{{ c.statute }} Sec {{ c.section }} — {{ c.description }}; {% endfor %}</td></tr>
-  <tr><th>Victim / Personated</th><td>{{ subject_name }}</td></tr>
-  <tr><th>Electronic Record Hash</th><td><code>{{ file.sha256_hash }}</code></td></tr>
-  <tr><th>Forensic Summary</th><td>Multi-modal deepfake detection — visual manip {{ "%.2f"|format(visual.spatial_cnn_manipulation_probability*100) }}%, synthetic voice {{ "%.2f"|format(acoustic.tts_synthetic_probability*100) }}%</td></tr>
-</table>
-""" + EXPLANATION_GROUNDS_HTML + """
-<p>Complainant requests registration of FIR and preservation of intermediary logs under BNSS/BSA procedures.</p>
-<p>Date: {{ ist_date }} IST | BharatShield Packet {{ packet_id }}</p>
-</body>
-</html>
-"""
+        c.setFont("Times-Bold", 10)
+        c.drawRightString(w - 6*mm, h - 6*mm, self.doc_type_label)
+        c.setFont("Courier", 7.5)
+        c.drawRightString(w - 6*mm, h - 11*mm, f"Reference No.: {self.ref_number}")
 
-TEMPLATE_CYBER_FIR = """
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"/><title>Cyber Crime FIR</title>
-<style>body{font-family:'Times New Roman',serif;margin:2cm;}</style>
-</head>
-<body>
-<h1 style="text-align:center;">Cyber Crime First Information Report (Draft)</h1>
-<p>Offences: BNS §319 (Cheating by Personation), §336 (Forgery of electronic records), §356 (Criminal Defamation)</p>
-<p>Subject media SHA-256: <code>{{ file.sha256_hash }}</code></p>
-<p>Identified / declared person: {{ subject_name }} (source: {{ identity.identity_source.value }})</p>
-""" + EXPLANATION_GROUNDS_HTML + """
-<p>Filed via BharatShield Legal Pipeline | {{ ist_timestamp }}</p>
-</body>
-</html>
-"""
+        # Classification row
+        c.setStrokeColor(GRAY_MID)
+        c.setLineWidth(0.5)
+        c.line(0, 8*mm, w, 8*mm)
+        c.setFillColor(DANGER)
+        c.setFont("Times-Bold", 7.5)
+        c.drawCentredString(w / 2, 3.2*mm, self.classification)
 
-TEMPLATE_DEEPFAKE_SUMMARY = """
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"/><title>Deepfake Forensic Summary</title>
-<style>
-  body { font-family: 'Times New Roman', serif; font-size: 11pt; margin: 2cm; }
-  h1 { text-align: center; font-size: 14pt; }
-  table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-  td, th { border: 1px solid #000; padding: 8px; text-align: left; }
-  th { background: #f0f0f0; width: 28%; }
-</style>
-</head>
-<body>
-<h1>Deepfake Forensic Classification Report</h1>
-<p><strong>Packet ID:</strong> {{ packet_id }} &nbsp; <strong>Date (IST):</strong> {{ ist_timestamp }}</p>
-<p><strong>Subject:</strong> {{ subject_name }}</p>
-<p><strong>Media SHA-256:</strong> <code>{{ file.sha256_hash }}</code></p>
-<p>{{ explanation.summary }}</p>
-<table>
-  <tr><th>Category</th><th>Severity</th><th>Finding</th><th>Metric</th></tr>
-  {% for f in explanation.findings %}
-  <tr>
-    <td>{{ f.category }}</td>
-    <td>{{ f.severity.value }}</td>
-    <td>{{ f.plain_language }}</td>
-    <td>{% if f.metric_ref %}{{ f.metric_ref }}: {{ f.value }}{% else %}—{% endif %}</td>
-  </tr>
-  {% endfor %}
-</table>
-<p><em>This report is generated for court and authority review under the Bharatiya Sakshya Adhiniyam, 2023 evidentiary framework.</em></p>
-</body>
-</html>
-"""
+def verdict_badge(styles, verdict, score):
+    color_map = {"LIKELY SYNTHETIC": DANGER, "UNCERTAIN": WARNING, "LIKELY AUTHENTIC": SUCCESS}
+    col = color_map.get(verdict, DANGER)
+    data = [[
+        Paragraph(f"VERDICT: {verdict}", styles["verdict_text"]),
+        Paragraph(f"Fusion Score: {score:.1%}", styles["verdict_text"]),
+    ]]
+    t = Table(data, colWidths=["60%", "40%"])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",   (0,0), (-1,-1), colors.HexColor("#FBEEEE")),
+        ("TEXTCOLOR",    (0,0), (-1,-1), col),
+        ("ALIGN",        (0,0), (-1,-1), "CENTER"),
+        ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
+        ("BOX",          (0,0), (-1,-1), 1.2, col),
+        ("ROWPADDING",   (0,0), (-1,-1), 9),
+        ("LEFTPADDING",  (0,0), (-1,-1), 8),
+        ("RIGHTPADDING", (0,0), (-1,-1), 8),
+    ]))
+    return t
 
-TEMPLATE_COMPLETE_LEGAL_PACKET = """
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"/><title>Complete Legal Evidence Packet</title>
-<style>
-  body { font-family: 'Times New Roman', serif; font-size: 11pt; margin: 1.5cm; }
-  h1 { text-align: center; font-size: 16pt; page-break-after: avoid; }
-  h2 { font-size: 13pt; border-bottom: 2px solid #000; margin-top: 20px; page-break-after: avoid; }
-  h3 { font-size: 11pt; margin-top: 14px; }
-  table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-  td, th { border: 1px solid #000; padding: 6px; vertical-align: top; font-size: 10pt; }
-  th { background: #e8e8e8; width: 32%; }
-  .cover { text-align: center; margin: 40px 0; }
-  .page-break { page-break-before: always; }
-  ul { margin: 8px 0 8px 20px; }
-</style>
-</head>
-<body>
-<div class="cover">
-  <h1>LEGAL EVIDENCE PACKET</h1>
-  <p><strong>BharatShield Sovereign Compliance System</strong></p>
-  <p>Packet ID: {{ packet_id }}</p>
-  <p>Generated: {{ ist_timestamp }}</p>
-  <p>Subject: <strong>{{ subject_name }}</strong></p>
-  <p>Case classification: {{ routing.case_type.value }}</p>
-</div>
+def kv_table(rows, styles, col_widths=("35%", "65%")):
+    """Renders a two-column key-value table."""
+    data = [[Paragraph(k, styles["field_label"]),
+             Paragraph(str(v), styles["field_value"])] for k, v in rows]
+    t = Table(data, colWidths=col_widths)
+    t.setStyle(TableStyle([
+        ("BACKGROUND",  (0,0), (0,-1), GRAY_LIGHT),
+        ("VALIGN",      (0,0), (-1,-1), "TOP"),
+        ("GRID",        (0,0), (-1,-1), 0.35, colors.HexColor("#C5CED6")),
+        ("ROWPADDING",  (0,0), (-1,-1), 6),
+        ("LEFTPADDING", (0,0), (0,-1), 8),
+        ("LEFTPADDING", (1,0), (1,-1), 10),
+        ("RIGHTPADDING",(0,0), (-1,-1), 8),
+        ("LINEBELOW",   (0,-1), (-1,-1), 0.5, colors.HexColor("#B7C3CF")),
+    ]))
+    return t
 
-<h2>SECTION 1 — Executive Summary</h2>
-<p>{{ explanation.summary }}</p>
-<p><strong>Legal routing:</strong> {{ routing.routing_rationale }}</p>
-<p><strong>Intermediary takedown window:</strong> {{ takedown_hours }} hours (deadline {{ deadline_ist }})</p>
+def section(title, styles):
+    return KeepTogether([
+        HRFlowable(width="100%", thickness=0.6, color=ACCENT),
+        Spacer(1, 1.2*mm),
+        Paragraph(f"{title.upper()}", styles["section_head"]),
+    ])
 
-<h2>SECTION 2 — Applicable Statutory Charges</h2>
-<table>
-  <tr><th>Statute</th><th>Section</th><th>Description</th></tr>
-  {% for c in routing.charges %}
-  <tr><td>{{ c.statute }}</td><td>{{ c.section }}</td><td>{{ c.description }}</td></tr>
-  {% endfor %}
-</table>
+def sig_block(name, designation, org, date_str, styles):
+    data = [[
+        Paragraph(f"<b>{name}</b><br/>{designation}<br/>{org}", styles["field_value"]),
+        Paragraph(f"Signature: ___________________________<br/><br/>Date: {date_str}", styles["field_value"]),
+    ]]
+    t = Table(data, colWidths=["50%", "50%"])
+    t.setStyle(TableStyle([
+        ("BOX",        (0,0), (-1,-1), 0.5, GRAY_MID),
+        ("INNERGRID",  (0,0), (-1,-1), 0.35, colors.HexColor("#D3DAE2")),
+        ("VALIGN",     (0,0), (-1,-1), "TOP"),
+        ("ROWPADDING", (0,0), (-1,-1), 10),
+        ("LEFTPADDING",(0,0), (-1,-1), 10),
+        ("RIGHTPADDING",(0,0), (-1,-1), 10),
+    ]))
+    return t
 
-<h2>SECTION 3 — Electronic Record Identification (BSA 2023)</h2>
-<table>
-  <tr><th>Original filename</th><td>{{ file.filename }}</td></tr>
-  <tr><th>Format</th><td>{{ file.container_format }}</td></tr>
-  <tr><th>Size (bytes)</th><td>{{ file.file_size_bytes }}</td></tr>
-  <tr><th>SHA-256 hash</th><td><code>{{ file.sha256_hash }}</code></td></tr>
-  <tr><th>Workstation serial</th><td>{{ system.workstation_serial_number }}</td></tr>
-  <tr><th>Terminal MAC</th><td>{{ system.terminal_mac_address }}</td></tr>
-  <tr><th>Analyst ID</th><td>{{ system.analyst_id }}</td></tr>
-</table>
+def make_page_template(canvas, doc, case_id):
+    canvas.saveState()
+    w, h = A4
+    # Footer
+    canvas.setFont("Times-Roman", 7.5)
+    canvas.setFillColor(GRAY_MID)
+    canvas.drawString(20*mm, 12*mm,
+                      f"BharatShield | Case {case_id} | Restricted circulation")
+    canvas.drawRightString(w - 20*mm, 12*mm,
+                           f"Page {doc.page} | Generated {datetime.now().strftime('%d %b %Y %H:%M IST')}")
+    canvas.setStrokeColor(GRAY_MID)
+    canvas.setLineWidth(0.45)
+    canvas.line(20*mm, 15*mm, w - 20*mm, 15*mm)
+    canvas.restoreState()
 
-<div class="page-break"></div>
-<h2>SECTION 4 — Schedule to Section 63, BSA 2023 — Part A (User Declaration)</h2>
-<p>I certify lawful control of the device from which the electronic record was produced, without alteration of substantive content, for production under Section 63 of the Bharatiya Sakshya Adhiniyam, 2023.</p>
-<table>
-  <tr><th>Declarant</th><td>{{ analyst_display_name }}</td></tr>
-  <tr><th>Place / Date (IST)</th><td>{{ place }} / {{ ist_timestamp }}</td></tr>
-</table>
-<p>Signature: _________________________ Date: {{ ist_date }}</p>
+def _trim_trailing_pagebreaks(story: list) -> list:
+    trimmed_story = list(story)
+    while trimmed_story and isinstance(trimmed_story[-1], PageBreak):
+        trimmed_story.pop()
+    return trimmed_story
 
-<h2>SECTION 5 — Schedule to Section 63, BSA 2023 — Part B (Expert Certification)</h2>
-<p>Certified by authorised digital forensic examiner under Section 79A, Information Technology Act.</p>
-<table>
-  <tr><th>Expert</th><td>{{ expert_name }} ({{ expert_id }})</td></tr>
-  <tr><th>Subject identified</th><td>{{ subject_name }} ({{ identity.identity_source.value }})</td></tr>
-  <tr><th>Hash verified</th><td><code>{{ file.sha256_hash }}</code></td></tr>
-</table>
-<h3>Forensic metrics</h3>
-<ul>
-  <li>Spatial manipulation probability: {{ "%.2f"|format(visual.spatial_cnn_manipulation_probability * 100) }}%</li>
-  <li>Lip-sync error: {{ "%.2f"|format(visual.lip_sync_alignment_error_ms) }} ms</li>
-  <li>TTS synthetic probability: {{ "%.2f"|format(acoustic.tts_synthetic_probability * 100) }}%</li>
-  <li>Anti-spoofing confidence: {{ "%.2f"|format(acoustic.anti_spoofing_nn_confidence * 100) }}%</li>
-</ul>
-""" + EXPLANATION_GROUNDS_HTML + """
-<p>Expert signature: _________________________ Date: {{ ist_date }}</p>
+# ─────────────────────────────────────────────
+# NEW SECTION: Target Person Details
+# ─────────────────────────────────────────────
+def _person_details_section(identity: ResolvedIdentity, styles: dict) -> list:
+    story = [
+        section("Resolved Subject Biometrics & Identity Profile", styles),
+    ]
+    if identity.matched:
+        rows = [
+            ("Match Status", "RESOLVED / BIOMETRIC MATCH DETECTED"),
+            ("Resolved Subject Name", _subject_name(identity)),
+            ("Aadhaar Number (Masked)", identity.profile.aadhaar_masked if identity.profile else "N/A"),
+            ("Gender", identity.profile.gender if identity.profile else "N/A"),
+        ]
+        if identity.electoral:
+            rows.extend([
+                ("Electoral Role", identity.electoral.role or "N/A"),
+                ("Constituency", identity.electoral.constituency or "N/A"),
+                ("Party Affiliation", identity.electoral.party_affiliation or "N/A"),
+                ("Active Candidacy (MCC)", "Yes" if identity.electoral.active_candidacy_mcc else "No"),
+            ])
+        if identity.cosine_similarity_face:
+            rows.append(("Face Cosine Similarity", f"{identity.cosine_similarity_face:.4%}"))
+        if identity.cosine_similarity_voice:
+            rows.append(("Voice Cosine Similarity", f"{identity.cosine_similarity_voice:.4%}"))
+        if identity.fused_similarity:
+            rows.append(("Fused Confidence Score", f"{identity.fused_similarity:.4%}"))
+        rows.append(("Verification Source", identity.identity_source.value))
+    else:
+        rows = [
+            ("Match Status", "UNRESOLVED / BELOW MATCHING THRESHOLD"),
+            ("Identity Source", identity.identity_source.value),
+            ("Explanation", "The biometric indicators do not match any registered public figure in the reference database above the threshold.")
+        ]
+    
+    story.append(kv_table(rows, styles))
+    story.append(Spacer(1, 4*mm))
+    return story
 
-<div class="page-break"></div>
-<h2>SECTION 6 — Grounds for Deepfake Classification</h2>
-<p>See detailed findings above. This media exhibits indicators consistent with synthetic generation under multi-modal forensic analysis.</p>
+# ─────────────────────────────────────────────
+# INDIVIDUAL STORIES BUILDERS
+# ─────────────────────────────────────────────
 
-<h2>SECTION 7 — Regulatory Notices &amp; Complaints (Summary)</h2>
-<p><strong>IT Amendment Rules, 2026:</strong> Intermediary takedown notice required within {{ takedown_hours }} hours under Rule 3(1)(b).</p>
-{% if routing.case_type.value == 'case_b_active_candidate' %}
-<p><strong>RPA 1951:</strong> Complaint under Section 123(4) for corrupt practice to prejudice election regarding {{ subject_name }}.</p>
-<p><strong>Draft FIR:</strong> Offences under BNS §319, §336, §356 recommended for registration.</p>
-{% elif routing.case_type.value == 'case_a_eci_official' %}
-<p><strong>ECI:</strong> Contempt/obstruction notice under Article 324 regarding targeting an election official.</p>
-{% else %}
-<p><strong>Cyber crime:</strong> FIR recommended under BNS for cheating by personation, forgery, and defamation.</p>
-{% endif %}
+def _get_bsa_part_a_story(packet_id: str, system: SystemMetadata, file: FileMetadata, styles: dict) -> list:
+    ref = f"EP-{packet_id[:8]}"
+    date_str = datetime.now().strftime("%d %B %Y")
+    
+    story = [
+        HeaderBanner("DIGITAL EVIDENCE CERTIFICATE (PART A)", ref),
+        Spacer(1, 8*mm),
+        Paragraph("Digital Evidence Certificate (Part A)", styles["doc_title"]),
+        Paragraph("Schedule to Section 63 of the Bharatiya Sakshya Adhiniyam, 2023 · Part A", styles["doc_subtitle"]),
+        HRFlowable(width="100%", thickness=0.5, color=GRAY_MID),
+        Spacer(1, 4*mm),
+        
+        section("1. Declarant & Workstation Details", styles),
+        kv_table([
+            ("Full Name of Declarant", f"Forensic Analyst ({system.analyst_id})"),
+            ("Analyst / Operator ID", system.analyst_id),
+            ("Place of Certification", "Forensic Analysis Centre, India"),
+            ("Date & Time (IST)", _format_ist()),
+            ("Workstation Serial No.", system.workstation_serial_number),
+            ("Terminal MAC Address", system.terminal_mac_address),
+        ], styles),
+        Spacer(1, 4*mm),
+        
+        section("2. Electronic Record Identification", styles),
+        kv_table([
+            ("Original File Name", file.filename),
+            ("Container Format", file.container_format),
+            ("File Size (bytes)", f"{file.file_size_bytes:,}"),
+            ("SHA-256 Hash", file.sha256_hash),
+            ("Ingestion Timestamp", _format_ist(system.ingestion_timestamp)),
+        ], styles),
+        Spacer(1, 4*mm),
+        
+        section("3. Legal Declaration", styles),
+        Paragraph(
+            "I, the undersigned, hereby certify that I am the person in lawful control of the "
+            "computer resource and digital forensic workstation from which the electronic record "
+            "described above was produced. I affirm that the computer resource was operating "
+            "properly, and the ingestion and cryptographic hashing of the electronic record "
+            "were conducted in the ordinary course of forensic analysis, without any alteration "
+            "to its substantive contents. This certificate is issued in accordance with Section 63 "
+            "of the Bharatiya Sakshya Adhiniyam, 2023.", styles["body"]
+        ),
+        Spacer(1, 6*mm),
+        
+        sig_block(f"Forensic Analyst ({system.analyst_id})", "Declarant / Operator", 
+                  "Cyber Forensics Division, BharatShield", date_str, styles),
+        PageBreak()
+    ]
+    return story
 
-<h2>SECTION 8 — Chain of Custody Statement</h2>
-<p>The original electronic record, forensic analysis outputs, and this compiled packet are sealed with cryptographic hashes. Any alteration invalidates the bundle hash recorded in the audit log and eSakshya metadata.</p>
-<p><em>End of consolidated legal evidence packet — {{ packet_id }}</em></p>
-</body>
-</html>
-"""
+def _get_bsa_part_b_story(packet_id: str, system: SystemMetadata, file: FileMetadata, 
+                          visual: VisualForensics, acoustic: AcousticForensics, 
+                          identity: ResolvedIdentity, explanation: DeepfakeExplanation | None, 
+                          styles: dict) -> list:
+    ref = f"EP-{packet_id[:8]}"
+    date_str = datetime.now().strftime("%d %B %Y")
+    
+    story = [
+        HeaderBanner("TECHNICAL EXPERT CERTIFICATE (PART B)", ref),
+        Spacer(1, 8*mm),
+        Paragraph("Technical Expert Certificate (Part B)", styles["doc_title"]),
+        Paragraph("Schedule to Section 63 of the Bharatiya Sakshya Adhiniyam, 2023 · Part B", styles["doc_subtitle"]),
+        HRFlowable(width="100%", thickness=0.5, color=GRAY_MID),
+        Spacer(1, 4*mm),
+        
+        section("1. Technical Expert Details", styles),
+        kv_table([
+            ("Expert Name & Designation", "Dr. Authorized Forensic Examiner"),
+            ("Expert ID / License No.", "IT-79A-IND-2026-XXXX"),
+            ("Verification Workstation Serial", system.workstation_serial_number),
+            ("Verification MAC Address", system.terminal_mac_address),
+            ("Date & Time of Examination (IST)", _format_ist()),
+        ], styles),
+        Spacer(1, 4*mm),
+        
+        section("2. Forensic Analysis & Detection Metrics", styles),
+        kv_table([
+            ("Spatial CNN Manipulation Prob.", f"{visual.spatial_cnn_manipulation_probability:.4%}"),
+            ("3D Face Mesh Landmark Variance", f"{visual.face_mesh_landmark_variance:.6f}"),
+            ("Lip-sync Alignment Error", f"{visual.lip_sync_alignment_error_ms:.2f} ms"),
+            ("TTS Synthetic Voice Probability", f"{acoustic.tts_synthetic_probability:.4%}"),
+            ("Spectrogram Pitch Mismatch Ratio", f"{acoustic.spectrogram_pitch_mismatch_ratio:.4%}"),
+            ("Anti-spoofing NN Confidence (Bona Fide)", f"{acoustic.anti_spoofing_nn_confidence:.4%}"),
+        ], styles),
+        Spacer(1, 4*mm),
+    ]
+    
+    # Include details of the person present in the video
+    story.extend(_person_details_section(identity, styles))
+    
+    # Include grounds for deepfake classification (explanation findings)
+    story.append(section("3. Grounds for Deepfake Classification", styles))
+    if explanation:
+        story.append(Paragraph(f"<b>Summary:</b> {explanation.summary}", styles["body"]))
+        story.append(Spacer(1, 2*mm))
+        for f in explanation.findings:
+            story.append(Paragraph(
+                f"• <b>{f.category} ({f.severity.value.upper()}):</b> {f.plain_language} "
+                f"{f'({f.metric_ref}: {f.value})' if f.metric_ref else ''}",
+                styles["bullet"]
+            ))
+    else:
+        story.append(Paragraph("No automated grounds registered.", styles["body"]))
+    
+    story.extend([
+        Spacer(1, 4*mm),
+        section("4. Declaration & Sworn Opinion", styles),
+        Paragraph(
+            "I, Dr. Authorized Forensic Examiner, do hereby certify that the electronic record "
+            "described above was subjected to multi-modal deepfake analysis on validated "
+            "forensic models. It is my technical opinion, to a high degree of certainty, that "
+            "the media exhibits synthetic artifacts characteristic of generative artificial intelligence "
+            "impersonation. This certificate is issued under the authority of Section 79A of the "
+            "Information Technology Act, 2000 for production as electronic evidence.", styles["body"]
+        ),
+        Spacer(1, 6*mm),
+        sig_block("Dr. Authorized Forensic Examiner", "Digital Forensic Examiner (Sec. 79A IT Act)",
+                  "Forensic Analysis Centre, India", date_str, styles),
+        PageBreak()
+    ])
+    return story
 
-DOCUMENT_TEMPLATES: dict[str, str] = {
-    "bsa_section_63_part_a": TEMPLATE_BSA_PART_A,
-    "bsa_section_63_part_b": TEMPLATE_BSA_PART_B,
-    "it_rules_2026_intermediary_takedown_3h": TEMPLATE_IT_TAKEDOWN,
-    "it_rules_2026_intermediary_takedown_2h": TEMPLATE_IT_TAKEDOWN,
-    "eci_contempt_notice_art_324": TEMPLATE_ECI_CONTEMPT,
-    "rpa_eci_corrupt_practice_complaint": TEMPLATE_RPA_COMPLAINT,
-    "draft_fir_bns": TEMPLATE_DRAFT_FIR,
-    "cyber_crime_fir_bns": TEMPLATE_CYBER_FIR,
-    "deepfake_forensic_summary": TEMPLATE_DEEPFAKE_SUMMARY,
-    "complete_legal_evidence_packet": TEMPLATE_COMPLETE_LEGAL_PACKET,
-}
+def _get_it_rules_takedown_story(packet_id: str, file: FileMetadata, routing: LegalRoutingDecision, 
+                                 identity: ResolvedIdentity, styles: dict) -> list:
+    ref = f"TDN-{packet_id[:8]}"
+    date_str = datetime.now().strftime("%d %B %Y")
+    takedown = routing.takedown_hours
+    deadline = _format_ist(datetime.now(IST) + timedelta(hours=takedown))
+    subject = _subject_name(identity)
+    
+    story = [
+        HeaderBanner("PLATFORM TAKEDOWN NOTICE", ref),
+        Spacer(1, 8*mm),
+        Paragraph("Platform Takedown Notice", styles["doc_title"]),
+        Paragraph("Rule 3(1)(b) of IT Amendment Rules 2026 · Statutory Removal Notice", styles["doc_subtitle"]),
+        HRFlowable(width="100%", thickness=0.5, color=GRAY_MID),
+        Spacer(1, 4*mm),
+        
+        kv_table([
+            ("To", "Grievance Officer / Nodal Compliance Officer (Social Media Intermediary)"),
+            ("Re", "Mandatory Removal of Synthetically Generated / Deepfake Content"),
+            ("Date", date_str),
+            ("Notice Reference", ref),
+            ("Compliance Window", f"Mandatory removal within {takedown} hours (Deadline: {deadline})"),
+        ], styles),
+        Spacer(1, 4*mm),
+        
+        section("1. Infringing Content Details", styles),
+        kv_table([
+            ("Target Person", subject),
+            ("Target Person Details", f"Name: {subject} | Source: {identity.identity_source.value}"),
+            ("Content Description", f"Morphed/synthetic digital record in filename: {file.filename}"),
+            ("SHA-256 of Media File", file.sha256_hash),
+        ], styles),
+        Spacer(1, 4*mm),
+    ]
+    
+    # Include details of the person present in the video
+    story.extend(_person_details_section(identity, styles))
+    
+    story.extend([
+        section("2. Legal Grounds & Applicable Penal Provisions", styles),
+        Paragraph(
+            f"The content depicted above has been analysed via the BharatShield Deepfake Detection "
+            f"Platform and classified as synthetic with high confidence. Under the Information Technology "
+            f"Rules and the Bharatiya Nyaya Sanhita, 2023, circulating deepfakes of public figures "
+            f"constitutes cheating by personation and forgery. The following charges are applicable:", styles["body"]
+        ),
+        Spacer(1, 2*mm)
+    ])
+    
+    for c in routing.charges:
+        story.append(Paragraph(f"• <b>{c.statute} Sec {c.section}:</b> {c.description}", styles["bullet"]))
+        
+    story.extend([
+        Spacer(1, 4*mm),
+        section("3. Action Required from Intermediary", styles),
+        Paragraph(
+            "Pursuant to Rule 3(1)(b) of the IT Amendment Rules, 2026, you are directed to immediately "
+            "disable access to the infringing content within the compliance window, preserve all "
+            "associated metadata and upload IP logs for a period of 180 days, and report back compliance "
+            "to the Cyber Crime Coordination Centre.", styles["body"]
+        ),
+        Spacer(1, 6*mm),
+        sig_block("BharatShield Legal Automation", "Authorized Compliance Representative",
+                  "Ministry of Electronics and IT (MeitY)", date_str, styles),
+        PageBreak()
+    ])
+    return story
+
+def _get_eci_contempt_story(packet_id: str, file: FileMetadata, identity: ResolvedIdentity, styles: dict) -> list:
+    ref = f"ECI-{packet_id[:8]}"
+    date_str = datetime.now().strftime("%d %B %Y")
+    subject = _subject_name(identity)
+    
+    story = [
+        HeaderBanner("ECI CONTEMPT NOTICE", ref, classification="CONFIDENTIAL – ELECTORAL INTEGRITY"),
+        Spacer(1, 8*mm),
+        Paragraph("Notice of Contempt / Obstruction", styles["doc_title"]),
+        Paragraph("Article 324 of the Constitution of India · Model Code of Conduct MCC Violation", styles["doc_subtitle"]),
+        HRFlowable(width="100%", thickness=0.5, color=GRAY_MID),
+        Spacer(1, 4*mm),
+        
+        kv_table([
+            ("To", "The Election Commission of India (ECI), Nirvachan Sadan, New Delhi"),
+            ("Subject", f"Obstruction of Election Official via Deepfake Impersonation: {subject}"),
+            ("Date", date_str),
+            ("Reference ID", ref),
+            ("Primary Evidence Hash", file.sha256_hash),
+        ], styles),
+        Spacer(1, 4*mm),
+        
+        section("1. Details of Target Election Official", styles),
+    ]
+    
+    # Include details of the person present in the video
+    story.extend(_person_details_section(identity, styles))
+    
+    story.extend([
+        section("2. Summary of Electoral Contempt", styles),
+        Paragraph(
+            f"It has been detected that a synthetically generated video depicting {subject} has "
+            f"been circulated with the intent to disrupt official election duties and damage the "
+            f"credibility of the constitutional electoral processes. Under Article 324 and the Model Code "
+            f"of Conduct, this represents a deliberate obstruction of ECI operations, warranting "
+            f"immediate regulatory blockages and initiation of contempt proceedings.", styles["body"]
+        ),
+        Spacer(1, 6*mm),
+        sig_block("BharatShield Sovereign Compliance System", "ECI Nodal Desk Representative",
+                  "Government of India", date_str, styles),
+        PageBreak()
+    ])
+    return story
+
+def _get_rpa_complaint_story(packet_id: str, file: FileMetadata, identity: ResolvedIdentity, styles: dict) -> list:
+    ref = f"RPA-{packet_id[:8]}"
+    date_str = datetime.now().strftime("%d %B %Y")
+    subject = _subject_name(identity)
+    
+    story = [
+        HeaderBanner("RPA SECTION 123(4) COMPLAINT", ref, classification="CONFIDENTIAL – ELECTORAL INTEGRITY"),
+        Spacer(1, 8*mm),
+        Paragraph("Complaint under Section 123(4), RPA 1951", styles["doc_title"]),
+        Paragraph("Representation of the People Act, 1951 · Corrupt Practice Complaint", styles["doc_subtitle"]),
+        HRFlowable(width="100%", thickness=0.5, color=GRAY_MID),
+        Spacer(1, 4*mm),
+        
+        kv_table([
+            ("To", "The Election Commission of India (ECI), New Delhi"),
+            ("Re", "Corrupt Practice (MCC Violation) regarding candidate deepfake"),
+            ("Date", date_str),
+            ("Reference ID", ref),
+            ("Candidate Name", subject),
+            ("Electoral Constituency", identity.electoral.constituency if identity.electoral else "N/A"),
+            ("Party Affiliation", identity.electoral.party_affiliation if identity.electoral else "N/A"),
+            ("Evidence SHA-256", file.sha256_hash),
+        ], styles),
+        Spacer(1, 4*mm),
+        
+        section("1. Details of Affected Candidate", styles),
+    ]
+    
+    # Include details of the person present in the video
+    story.extend(_person_details_section(identity, styles))
+    
+    story.extend([
+        section("2. Prayer and Relief Sought", styles),
+        Paragraph(
+            f"The complainant prays that the Commission take immediate regulatory action against the "
+            f"unauthorized distribution of deepfakes depicting the candidate {subject}. Such "
+            f"actions violate Section 123(4) of the RPA 1951 by publishing false statements in relation "
+            f"to candidate conduct. We pray for immediate takedown orders and prosecution of the creators.", styles["body"]
+        ),
+        Spacer(1, 6*mm),
+        sig_block("BharatShield Compliance Officer", "Electoral Misinformation Cell",
+                  "Election Commission Liaison Office", date_str, styles),
+        PageBreak()
+    ])
+    return story
+
+def _get_fir_story(packet_id: str, file: FileMetadata, routing: LegalRoutingDecision, 
+                   visual: VisualForensics, acoustic: AcousticForensics,
+                   identity: ResolvedIdentity, explanation: DeepfakeExplanation | None, 
+                   styles: dict) -> list:
+    ref = f"FSR-{packet_id[:8]}"
+    date_str = datetime.now().strftime("%d %B %Y")
+    subject = _subject_name(identity)
+    
+    story = [
+        HeaderBanner("DRAFT FIR SUPPORT REPORT", ref),
+        Spacer(1, 8*mm),
+        Paragraph("First Information Report (Draft Support)", styles["doc_title"]),
+        Paragraph("Evidentiary Report for Registration of FIR · Bharatiya Nyaya Sanhita 2023", styles["doc_subtitle"]),
+        HRFlowable(width="100%", thickness=0.5, color=GRAY_MID),
+        Spacer(1, 4*mm),
+        
+        kv_table([
+            ("To", "Officer-in-Charge, Cyber Crime Police Station / Local Police Station"),
+            ("Victim / Personated", subject),
+            ("Electronic Record Hash", file.sha256_hash),
+            ("Date", date_str),
+            ("Reference Reference", ref),
+        ], styles),
+        Spacer(1, 4*mm),
+        
+        section("1. Details of Victim / Personated Subject", styles),
+    ]
+    
+    # Include details of the person present in the video
+    story.extend(_person_details_section(identity, styles))
+    
+    story.extend([
+        section("2. Applicable Sections and Offences", styles),
+        Paragraph(
+            "Based on multi-modal AI verification and statutory rules, the following offences "
+            "are disclosed under the Bharatiya Nyaya Sanhita (BNS) 2023 and the Information "
+            "Technology Act, 2000:", styles["body"]
+        ),
+        Spacer(1, 2*mm)
+    ])
+    
+    for c in routing.charges:
+        story.append(Paragraph(f"• <b>{c.statute} Sec {c.section}:</b> {c.description}", styles["bullet"]))
+        
+    story.extend([
+        Spacer(1, 4*mm),
+        section("3. Forensic Deepfake Analysis Summary", styles),
+        kv_table([
+            ("Visual Manipulation Probability", f"{visual.spatial_cnn_manipulation_probability:.2%}"),
+            ("Voice Synthetic Probability", f"{acoustic.tts_synthetic_probability:.2%}"),
+            ("Forensic Recommendation", "Immediate registration of FIR and service of takedown to intermediary"),
+        ], styles),
+        Spacer(1, 4*mm),
+        section("4. Grounds for Deepfake Classification", styles),
+    ])
+    
+    if explanation:
+        story.append(Paragraph(f"<b>Summary:</b> {explanation.summary}", styles["body"]))
+        story.append(Spacer(1, 2*mm))
+        for f in explanation.findings:
+            story.append(Paragraph(f"• <b>{f.category} ({f.severity.value.upper()}):</b> {f.plain_language}", styles["bullet"]))
+    else:
+        story.append(Paragraph("No automated grounds registered.", styles["body"]))
+        
+    story.extend([
+        Spacer(1, 6*mm),
+        sig_block("Cyber Crime Nodal Officer", "Technical Investigation Officer",
+                  "Cyber Crime Cell, Police Department", date_str, styles),
+        PageBreak()
+    ])
+    return story
+
+def _get_forensic_summary_story(packet_id: str, file: FileMetadata, identity: ResolvedIdentity, 
+                                explanation: DeepfakeExplanation | None, styles: dict) -> list:
+    ref = f"DFS-{packet_id[:8]}"
+    date_str = datetime.now().strftime("%d %B %Y")
+    
+    story = [
+        HeaderBanner("DEEPFAKE FORENSIC SUMMARY", ref),
+        Spacer(1, 8*mm),
+        Paragraph("Deepfake Forensic Summary Report", styles["doc_title"]),
+        Paragraph("BharatShield Multi-Modal Forensic Detection Benchmarks", styles["doc_subtitle"]),
+        HRFlowable(width="100%", thickness=0.5, color=GRAY_MID),
+        Spacer(1, 4*mm),
+        
+        section("1. Case Details", styles),
+        kv_table([
+            ("Packet Reference", ref),
+            ("Case Identifier ID", packet_id),
+            ("Generated Date", _format_ist()),
+            ("Subject Name Depicted", _subject_name(identity)),
+            ("Media File SHA-256", file.sha256_hash),
+        ], styles),
+        Spacer(1, 4*mm),
+    ]
+    
+    # Include details of the person present in the video
+    story.extend(_person_details_section(identity, styles))
+    
+    story.append(section("2. Detailed Findings", styles))
+    if explanation:
+        story.append(Paragraph(f"<b>Summary:</b> {explanation.summary}", styles["body"]))
+        story.append(Spacer(1, 4*mm))
+        
+        table_data = [[
+            Paragraph("Category", styles["table_header"]),
+            Paragraph("Severity", styles["table_header"]),
+            Paragraph("Finding Details", styles["table_header"]),
+            Paragraph("Metric Reference", styles["table_header"]),
+        ]]
+        for f in explanation.findings:
+            table_data.append([
+                Paragraph(f.category, styles["table_cell"]),
+                Paragraph(f.severity.value.upper(), styles["table_cell"]),
+                Paragraph(f.plain_language, styles["table_cell"]),
+                Paragraph(f"{f.metric_ref or '—'}: {f.value or '—'}" if f.metric_ref else "—", styles["table_cell"]),
+            ])
+            
+        t = Table(table_data, colWidths=["25%", "15%", "40%", "20%"])
+        t.setStyle(TableStyle([
+            ("BACKGROUND",   (0,0),  (-1,0),  NAVY),
+            ("TEXTCOLOR",    (0,0),  (-1,0),  WHITE),
+            ("BACKGROUND",   (0,1),  (-1,-1), WHITE),
+            ("ROWBACKGROUNDS",(0,1), (-1,-1), [WHITE, GRAY_LIGHT]),
+            ("GRID",         (0,0),  (-1,-1), 0.25, colors.HexColor("#BDC3C7")),
+            ("VALIGN",       (0,0),  (-1,-1), "TOP"),
+            ("ROWPADDING",   (0,0),  (-1,-1), 5),
+        ]))
+        story.append(t)
+    else:
+        story.append(Paragraph("No forensic findings registered.", styles["body"]))
+        
+    story.extend([
+        Spacer(1, 6*mm),
+        sig_block("CDAC Principal Scientist", "Expert Witness Representative",
+                  "AI Forensics Division, CDAC", date_str, styles),
+        PageBreak()
+    ])
+    return story
+
+def _get_cover_page_story(packet_id: str, file: FileMetadata, identity: ResolvedIdentity, 
+                          routing: LegalRoutingDecision, document_registry: list[tuple[str, str, list]], 
+                          styles: dict) -> list:
+    date_str = datetime.now().strftime("%d %B %Y, %H:%M:%S IST")
+    
+    cover = [
+        Spacer(1, 20*mm),
+        Paragraph("GOVERNMENT OF INDIA", ParagraphStyle("cover_gov", fontName="Times-Bold",
+                  fontSize=14, textColor=NAVY, alignment=TA_CENTER, leading=18, spaceAfter=0)),
+        Paragraph("BHARATSHIELD", ParagraphStyle("cover_brand", fontName="Times-Bold",
+                  fontSize=30, textColor=NAVY, alignment=TA_CENTER, leading=34, spaceAfter=1)),
+        Paragraph("National Deepfake Detection and Misinformation Response Platform",
+                  ParagraphStyle("cover_sub", fontName="Times-Roman", fontSize=11.5,
+                                 textColor=GRAY_MID, alignment=TA_CENTER, spaceAfter=2, leading=14)),
+        Spacer(1, 4*mm),
+        HRFlowable(width="80%", thickness=2, color=ACCENT, hAlign="CENTER"),
+        Spacer(1, 4*mm),
+        Paragraph("LEGAL DOCUMENT PACKAGE",
+                  ParagraphStyle("cover_type", fontName="Times-Bold", fontSize=19,
+                                 textColor=ACCENT, alignment=TA_CENTER, spaceAfter=5, leading=24)),
+        Spacer(1, 6*mm),
+        Table([[
+            Paragraph("Case ID", styles["field_label"]),
+            Paragraph(packet_id, styles["ref_num"]),
+        ],[
+            Paragraph("Generated", styles["field_label"]),
+            Paragraph(date_str, styles["field_value"]),
+        ],[
+            Paragraph("Classification", styles["field_label"]),
+            Paragraph("RESTRICTED — LAW ENFORCEMENT USE ONLY",
+                      ParagraphStyle("danger_sm", fontName="Times-Bold",
+                                     fontSize=9, textColor=DANGER)),
+        ]], colWidths=["35%", "65%"],
+        style=TableStyle([
+            ("BOX",        (0,0), (-1,-1), 0.5, GRAY_MID),
+            ("INNERGRID",  (0,0), (-1,-1), 0.25, GRAY_LIGHT),
+            ("ROWPADDING", (0,0), (-1,-1), 7),
+            ("LEFTPADDING",(0,0), (0,-1), 10),
+            ("BACKGROUND", (0,0), (0,-1), GRAY_LIGHT),
+        ])),
+        Spacer(1, 7*mm),
+        Paragraph("DOCUMENTS INCLUDED",
+                  ParagraphStyle("toc_head", fontName="Times-Bold", fontSize=11,
+                                 textColor=NAVY, alignment=TA_CENTER, spaceAfter=0.5)),
+        Spacer(1, 2*mm),
+    ]
+    
+    # TOC
+    toc_rows = []
+    for idx, (slug, title, _) in enumerate(document_registry, 1):
+        toc_rows.append([str(idx), title, slug.replace("_", " ").title()])
+        
+    t = Table(toc_rows, colWidths=["6%", "52%", "42%"])
+    t.setStyle(TableStyle([
+        ("BACKGROUND",  (0,0), (-1,-1), GRAY_LIGHT),
+        ("ROWBACKGROUNDS",(0,0),(-1,-1), [GRAY_LIGHT, WHITE]),
+        ("GRID",        (0,0), (-1,-1), 0.25, colors.HexColor("#BDC3C7")),
+        ("FONTNAME",    (0,0), (-1,-1), "Times-Roman"),
+        ("FONTSIZE",    (0,0), (-1,-1), 9),
+        ("ROWPADDING",  (0,0), (-1,-1), 6),
+        ("FONTNAME",    (1,0), (1,-1), "Times-Bold"),
+        ("TEXTCOLOR",   (1,0), (1,-1), NAVY),
+        ("TEXTCOLOR",   (2,0), (2,-1), GRAY_MID),
+    ]))
+    cover.append(t)
+    cover.append(PageBreak())
+    
+    return cover
+
+def _get_complete_evidence_packet_story(packet_id: str, file: FileMetadata, identity: ResolvedIdentity,
+                                        routing: LegalRoutingDecision, document_registry: list[tuple[str, str, list]],
+                                        explanation: DeepfakeExplanation | None, styles: dict) -> list:
+    # Build Cover Page
+    story = _get_cover_page_story(packet_id, file, identity, routing, document_registry, styles)
+    
+    # Section 1: Executive Summary
+    story.extend([
+        section("SECTION 1 — Executive Summary", styles),
+        Paragraph(explanation.summary if explanation else "No automated explanation generated.", styles["body"]),
+        Paragraph(f"<b>Legal routing rationale:</b> {routing.routing_rationale}", styles["body"]),
+        Paragraph(f"<b>Intermediary takedown window:</b> {routing.takedown_hours} hours (Deadline: {_format_ist(datetime.now(IST) + timedelta(hours=routing.takedown_hours))})", styles["body"]),
+        Spacer(1, 4*mm),
+    ])
+    
+    # Section 2: Applicable Statutory Charges
+    charge_rows = [["Statute", "Section", "Description"]]
+    for c in routing.charges:
+        charge_rows.append([c.statute, c.section, c.description])
+    
+    t_charges = Table(charge_rows, colWidths=["30%", "20%", "50%"])
+    t_charges.setStyle(TableStyle([
+        ("BACKGROUND",   (0,0),  (-1,0),  NAVY),
+        ("TEXTCOLOR",    (0,0),  (-1,0),  WHITE),
+        ("GRID",         (0,0),  (-1,-1), 0.25, colors.HexColor("#BDC3C7")),
+        ("VALIGN",       (0,0),  (-1,-1), "TOP"),
+        ("ROWPADDING",   (0,0),  (-1,-1), 6),
+        ("FONTSIZE",     (0,0),  (-1,-1), 9),
+    ]))
+    story.extend([
+        section("SECTION 2 — Applicable Statutory Charges", styles),
+        t_charges,
+        Spacer(1, 4*mm),
+    ])
+    
+    # Section 3: Electronic Record Identification
+    story.extend([
+        section("SECTION 3 — Electronic Record Identification (BSA 2023)", styles),
+        kv_table([
+            ("Original Filename", file.filename),
+            ("Container Format", file.container_format),
+            ("Size (bytes)", f"{file.file_size_bytes:,}"),
+            ("SHA-256 Hash", file.sha256_hash),
+        ], styles),
+        Spacer(1, 4*mm),
+    ])
+    
+    # Append the stories of the individual documents
+    for slug, title, doc_story in document_registry:
+        if slug == "complete_legal_evidence_packet":
+            continue
+        # Trim leading/trailing pagebreaks if any
+        trimmed_story = list(doc_story)
+        while trimmed_story and isinstance(trimmed_story[-1], PageBreak):
+            trimmed_story.pop()
+        
+        story.extend([
+            PageBreak(),
+            section(f"SECTION: {title}", styles),
+            Spacer(1, 4*mm),
+        ])
+        story.extend(trimmed_story)
+        
+    # Section 6: Details of the Person Present in the Video
+    story.extend([
+        PageBreak(),
+        section("SECTION 6 — Details of the Person Present in the Video", styles),
+    ])
+    story.extend(_person_details_section(identity, styles))
+    
+    # Section 7: Regulatory notices & complaints
+    takedown = routing.takedown_hours
+    story.extend([
+        section("SECTION 7 — Regulatory Notices & Complaints (Summary)", styles),
+        Paragraph(f"<b>IT Amendment Rules, 2026:</b> Intermediary takedown notice required within {takedown} hours under Rule 3(1)(b).", styles["body"]),
+    ])
+    if routing.case_type.value == 'case_b_active_candidate':
+        story.extend([
+            Paragraph(f"<b>RPA 1951:</b> Complaint under Section 123(4) for corrupt practice to prejudice election regarding <b>{_subject_name(identity)}</b>.", styles["body"]),
+            Paragraph("<b>Draft FIR:</b> Offences under BNS §319, §336, §356 recommended for registration.", styles["body"]),
+        ])
+    elif routing.case_type.value == 'case_a_eci_official':
+        story.extend([
+            Paragraph(f"<b>ECI:</b> Contempt/obstruction notice under Article 324 regarding targeting an election official (<b>{_subject_name(identity)}</b>).", styles["body"]),
+        ])
+    else:
+        story.extend([
+            Paragraph("<b>Cyber crime:</b> FIR recommended under BNS for cheating by personation, forgery, and defamation.", styles["body"]),
+        ])
+    story.append(Spacer(1, 4*mm))
+    
+    # Section 8: Chain of Custody / Integrity Statement
+    story.extend([
+        section("SECTION 8 — Chain of Custody & Integrity Statement", styles),
+        Paragraph(
+            "The original electronic record, forensic analysis outputs, and this compiled packet "
+            "are sealed with cryptographic hashes. Any alteration invalidates the bundle hash. "
+            "This log certifies that the digital evidence identified above has remained in an "
+            "unaltered state from the point of initial capture to the present, satisfying electronic "
+            "evidence admissibility requirements under Section 63 of the Bharatiya Sakshya Adhiniyam, 2023.", styles["body"]
+        ),
+        Spacer(1, 4*mm),
+    ])
+    
+    return story
 
 DOCUMENT_FILENAMES: dict[str, str] = {
     "bsa_section_63_part_a": "BSA_Section63_PartA_User_Declaration.pdf",
@@ -418,56 +877,11 @@ DOCUMENT_FILENAMES: dict[str, str] = {
     "complete_legal_evidence_packet": "Complete_Legal_Evidence_Packet.pdf",
 }
 
-
 class DocumentGenerator:
-    """Renders Jinja2 HTML templates and compiles to PDF."""
+    """Renders ReportLab Flowables directly and compiles to PDF."""
 
     def __init__(self) -> None:
-        self._env = Environment(
-            loader=BaseLoader(),
-            autoescape=select_autoescape(["html", "xml"]),
-        )
-
-    def _build_context(
-        self,
-        packet_id: str,
-        system: SystemMetadata,
-        file: FileMetadata,
-        visual: VisualForensics,
-        acoustic: AcousticForensics,
-        identity: ResolvedIdentity,
-        routing: LegalRoutingDecision,
-        extra: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        now = _now_ist()
-        takedown = routing.takedown_hours
-        deadline = now + timedelta(hours=takedown)
-        ctx: dict[str, Any] = {
-            "packet_id": packet_id,
-            "system": system,
-            "file": file,
-            "visual": visual,
-            "acoustic": acoustic,
-            "identity": identity,
-            "subject_name": _subject_name(identity),
-            "routing": routing,
-            "ist_timestamp": _format_ist(now),
-            "ist_date": now.strftime("%d-%m-%Y"),
-            "ingestion_ist": _format_ist(system.ingestion_timestamp),
-            "place": "Forensic Analysis Centre, India",
-            "analyst_display_name": f"Forensic Analyst ({system.analyst_id})",
-            "expert_name": "Dr. Authorized Forensic Examiner",
-            "expert_id": "IT-79A-IND-2026-XXXX",
-            "imei": None,
-            "takedown_hours": takedown,
-            "deadline_ist": _format_ist(deadline),
-        }
-        if extra:
-            ctx.update(extra)
-        return ctx
-
-    def _html_to_pdf(self, html: str, output_path: Path) -> None:
-        html_to_pdf(html, output_path)
+        pass
 
     def _sha256_file(self, path: Path) -> str:
         h = hashlib.sha256()
@@ -489,45 +903,109 @@ class DocumentGenerator:
     ) -> list[GeneratedDocument]:
         out_dir = settings.output_dir / packet_id / "documents"
         out_dir.mkdir(parents=True, exist_ok=True)
-        generated: list[GeneratedDocument] = []
-        from schemas import DeepfakeExplanation as DE
-
-        expl = explanation or DE(
-            summary="No automated explanation generated.",
-            findings=[],
-            sources=[],
-        )
-        ctx = self._build_context(
-            packet_id, system, file, visual, acoustic, identity, routing,
-            extra={"explanation": expl},
-        )
-
+        
         doc_keys = list(routing.documents_to_generate)
         if explanation and explanation.findings and "deepfake_forensic_summary" not in doc_keys:
             doc_keys.append("deepfake_forensic_summary")
         if "complete_legal_evidence_packet" not in doc_keys:
             doc_keys.insert(0, "complete_legal_evidence_packet")
-
-        for doc_key in doc_keys:
-            # Normalize 2h/3h takedown template key
-            template_key = doc_key
-            if doc_key.startswith("it_rules_2026_intermediary_takedown_") and doc_key not in DOCUMENT_TEMPLATES:
-                template_key = (
-                    "it_rules_2026_intermediary_takedown_2h"
-                    if routing.takedown_hours == 2
-                    else "it_rules_2026_intermediary_takedown_3h"
-                )
-
-            tpl = DOCUMENT_TEMPLATES.get(template_key)
-            if not tpl:
-                logger.warning("Unknown document type: %s", doc_key)
+            
+        styles = build_styles()
+        
+        # Build individual document stories
+        individual_stories = {}
+        
+        if "bsa_section_63_part_a" in doc_keys:
+            individual_stories["bsa_section_63_part_a"] = (
+                "BSA Section 63 Part A User Declaration",
+                _get_bsa_part_a_story(packet_id, system, file, styles)
+            )
+        if "bsa_section_63_part_b" in doc_keys:
+            individual_stories["bsa_section_63_part_b"] = (
+                "BSA Section 63 Part B Expert Certification",
+                _get_bsa_part_b_story(packet_id, system, file, visual, acoustic, identity, explanation, styles)
+            )
+        if "it_rules_2026_intermediary_takedown_3h" in doc_keys:
+            individual_stories["it_rules_2026_intermediary_takedown_3h"] = (
+                "IT Rules 2026 Intermediary Takedown 3H Notice",
+                _get_it_rules_takedown_story(packet_id, file, routing, identity, styles)
+            )
+        if "it_rules_2026_intermediary_takedown_2h" in doc_keys:
+            individual_stories["it_rules_2026_intermediary_takedown_2h"] = (
+                "IT Rules 2026 Intermediary Takedown 2H Notice",
+                _get_it_rules_takedown_story(packet_id, file, routing, identity, styles)
+            )
+        if "eci_contempt_notice_art_324" in doc_keys:
+            individual_stories["eci_contempt_notice_art_324"] = (
+                "ECI Contempt Notice Article 324",
+                _get_eci_contempt_story(packet_id, file, identity, styles)
+            )
+        if "rpa_eci_corrupt_practice_complaint" in doc_keys:
+            individual_stories["rpa_eci_corrupt_practice_complaint"] = (
+                "RPA Section 123(4) ECI Complaint",
+                _get_rpa_complaint_story(packet_id, file, identity, styles)
+            )
+        if "draft_fir_bns" in doc_keys:
+            individual_stories["draft_fir_bns"] = (
+                "Draft FIR BNS Evidentiary Report",
+                _get_fir_story(packet_id, file, routing, visual, acoustic, identity, explanation, styles)
+            )
+        if "cyber_crime_fir_bns" in doc_keys:
+            individual_stories["cyber_crime_fir_bns"] = (
+                "Cyber Crime FIR BNS Support Report",
+                _get_fir_story(packet_id, file, routing, visual, acoustic, identity, explanation, styles)
+            )
+        if "deepfake_forensic_summary" in doc_keys:
+            individual_stories["deepfake_forensic_summary"] = (
+                "Deepfake Forensic Summary Report",
+                _get_forensic_summary_story(packet_id, file, identity, explanation, styles)
+            )
+            
+        # Build registries for complete evidence packet assembly
+        registry = []
+        for k in doc_keys:
+            if k == "complete_legal_evidence_packet":
                 continue
-
-            html = self._env.from_string(tpl).render(**ctx)
-            fname = DOCUMENT_FILENAMES.get(template_key, f"{doc_key}.pdf")
+            if k in individual_stories:
+                title, story = individual_stories[k]
+                registry.append((k, title, story))
+                
+        # Now complete packet story
+        if "complete_legal_evidence_packet" in doc_keys:
+            individual_stories["complete_legal_evidence_packet"] = (
+                "Complete Legal Evidence Packet",
+                _get_complete_evidence_packet_story(packet_id, file, identity, routing, registry, explanation, styles)
+            )
+            
+        generated: list[GeneratedDocument] = []
+        
+        for doc_key in doc_keys:
+            if doc_key not in individual_stories:
+                logger.warning("Unknown document type requested: %s", doc_key)
+                continue
+                
+            title, story = individual_stories[doc_key]
+            fname = DOCUMENT_FILENAMES.get(doc_key, f"{doc_key}.pdf")
             pdf_path = out_dir / fname
-            self._html_to_pdf(html, pdf_path)
-
+            
+            # Compile PDF using ReportLab SimpleDocTemplate
+            doc = SimpleDocTemplate(
+                str(pdf_path),
+                pagesize=A4,
+                leftMargin=20*mm, rightMargin=20*mm,
+                topMargin=18*mm,  bottomMargin=22*mm,
+                title=f"{title} — {packet_id[:8]}",
+                author="BharatShield Platform",
+                subject="Deepfake Detection Legal Documents",
+            )
+            
+            single_story = _trim_trailing_pagebreaks(story)
+            doc.build(
+                single_story,
+                onFirstPage=lambda c, d: make_page_template(c, d, packet_id[:8]),
+                onLaterPages=lambda c, d: make_page_template(c, d, packet_id[:8])
+            )
+            
             generated.append(
                 GeneratedDocument(
                     document_type=doc_key,
@@ -536,4 +1014,5 @@ class DocumentGenerator:
                     sha256_hash=self._sha256_file(pdf_path),
                 )
             )
+            
         return generated
