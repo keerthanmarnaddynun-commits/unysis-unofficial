@@ -93,3 +93,4 @@ RPPG_SNR_THRESHOLD = 0.3   # below this → likely synthetic face
 SYSTEM_NAME     = "BharatShield Deepfake Detection System"
 SYSTEM_VERSION  = "2.0.0"
 LEGAL_AUTHORITY = "IT Rules 2021 (India) / BSA Section 63"
+HEAD_DROPOUT = 0.3

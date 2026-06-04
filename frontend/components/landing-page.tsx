@@ -1,6 +1,6 @@
 "use client"
 
-import { Shield, Upload, Link, Play, ArrowRight, CheckCircle, Search, Scale, FileWarning, LogOut } from "lucide-react"
+import { Shield, Upload, Link, Play, ArrowRight, CheckCircle, Search, Scale, FileWarning, LogOut, Activity, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import NextLink from "next/link"
@@ -12,10 +12,13 @@ interface LandingPageProps {
   onUrlClick: () => void
   onDemoClick: () => void
   onHowItWorksClick: () => void
+  onViewDashboardClick?: () => void
+  onViewMetricsClick: () => void
+  onViewMyReportsClick: () => void
   onLogout: () => void
 }
 
-export function LandingPage({ userRole, onUploadClick, onUrlClick, onDemoClick, onHowItWorksClick, onLogout }: LandingPageProps) {
+export function LandingPage({ userRole, onUploadClick, onUrlClick, onDemoClick, onHowItWorksClick, onViewDashboardClick, onViewMetricsClick, onViewMyReportsClick, onLogout }: LandingPageProps) {
   const steps = [
     { icon: Upload, label: "Upload", description: "Submit media" },
     { icon: Search, label: "Analyze", description: "AI verification" },
@@ -26,39 +29,74 @@ export function LandingPage({ userRole, onUploadClick, onUrlClick, onDemoClick, 
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <header className="border-b border-border px-6 py-4">
-        <div className="max-w-7xl mx-auto flex flex-col gap-3">
-          {/* Row 1 */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Shield className="w-6 h-6 text-primary" />
-              </div>
-              <span className="text-xl font-semibold tracking-tight">BharatShield</span>
+      <header className="border-b border-border px-6 py-4 bg-background/50 backdrop-blur-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Shield className="w-6 h-6 text-primary" />
             </div>
+            <span className="text-xl font-semibold tracking-tight text-white">BharatShield</span>
+          </div>
+          
+          {/* Nav Items */}
+          <div className="flex items-center gap-6">
             <nav className="hidden md:flex items-center gap-6">
               <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">About</a>
               <button onClick={onHowItWorksClick} className="text-sm text-muted-foreground hover:text-foreground transition-colors">How it Works</button>
               <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Resources</a>
+              
+              <span className="h-4 w-px bg-border hidden lg:inline" />
+              
+              {/* Metrics button */}
+              <button 
+                onClick={onViewMetricsClick}
+                className="text-sm text-muted-foreground hover:text-sky-400 transition-colors flex items-center gap-1.5"
+              >
+                <Activity className="w-4 h-4 text-sky-400" />
+                <span>Metrics</span>
+              </button>
+              
+              {/* My Reports button */}
+              <button 
+                onClick={onViewMyReportsClick}
+                className="text-sm text-muted-foreground hover:text-emerald-400 transition-colors flex items-center gap-1.5"
+              >
+                <FileText className="w-4 h-4 text-emerald-400" />
+                <span>My Reports</span>
+              </button>
+              
+              {/* Authority Dashboard button */}
+              {userRole === "Authority" && onViewDashboardClick && (
+                <button 
+                  onClick={onViewDashboardClick}
+                  className="text-sm text-muted-foreground hover:text-indigo-400 transition-colors flex items-center gap-1.5"
+                >
+                  <Scale className="w-4 h-4 text-indigo-400" />
+                  <span>Authority Dashboard</span>
+                </button>
+              )}
             </nav>
-          </div>
-          
-          {/* Row 2 */}
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground/80 font-medium">Logged in as: {userRole}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onLogout}
-              className="text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-1.5 h-7 px-2"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              Logout
-            </Button>
+            
+            <div className="flex items-center gap-4">
+              <span className="text-xs text-muted-foreground/80 font-medium hidden sm:inline-block px-2.5 py-1.5 bg-secondary/80 rounded-lg border border-border/40">
+                Role: {userRole}
+              </span>
+              
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onLogout}
+                className="text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-1.5 h-9 px-3"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Logout</span>
+              </Button>
+            </div>
           </div>
         </div>
       </header>
-
+ 
       {/* Hero Section */}
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-16">
         <div className="max-w-4xl mx-auto text-center space-y-8">

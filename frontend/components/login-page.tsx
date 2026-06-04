@@ -13,12 +13,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export type Role = "Citizen" | "Journalist" | "Police" | "Authority"
 
 interface LoginPageProps {
-  onLogin: (role: Role) => void
+  onLogin: (role: Role, identifier: string, name: string, organization: string) => void
 }
 
 export function LoginPage({ onLogin }: LoginPageProps) {
   const [role, setRole] = useState<Role>("Citizen")
   const [identifier, setIdentifier] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
   const getPlaceholder = (selectedRole: Role) => {
     switch (selectedRole) {
@@ -30,10 +32,37 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     }
   }
 
-  const handleContinue = (e: FormEvent) => {
+  const handleContinue = async (e: FormEvent) => {
     e.preventDefault()
-    if (identifier.trim()) {
-      onLogin(role)
+    if (!identifier.trim()) return
+
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch("http://127.0.0.1:8000/verify-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role, identifier }),
+      })
+      if (!res.ok) {
+        throw new Error(`Authentication server returned error: ${res.status}`)
+      }
+      const data = await res.json()
+      if (data.valid && data.user) {
+        onLogin(
+          role,
+          data.user.official_id || identifier,
+          data.user.name || "Verified User",
+          data.user.organization || "Independent"
+        )
+      } else {
+        setError(data.message || "Invalid identification code for the selected role.")
+      }
+    } catch (err: any) {
+      console.error(err)
+      setError("Failed to connect to authentication server. Please check your network or backend logs.")
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -82,12 +111,18 @@ export function LoginPage({ onLogin }: LoginPageProps) {
               />
             </div>
 
-            <Button type="submit" className="w-full text-base py-5 mt-4">
-              Continue
+            {error && (
+              <div className="p-3 bg-destructive/10 border border-destructive/25 text-destructive rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+
+            <Button type="submit" className="w-full text-base py-5 mt-4" disabled={loading}>
+              {loading ? "Verifying ID..." : "Continue"}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground pt-4">
-              Role verification will be implemented in future version
+              Access is restricted to authorized credentials
             </p>
           </form>
         </CardContent>

@@ -88,3 +88,152 @@ export async function analyzeFile(file: File, timeoutMs: number = 300000): Promi
     clearTimeout(timeoutId);
   }
 }
+
+export interface CustodyLogItem {
+  time: string;
+  event: string;
+  actor: string;
+  notes?: string;
+}
+
+export interface ReanalysisItem {
+  analysis: any;
+  performed_at: string;
+  performed_by: string;
+}
+
+export interface LegalDocument {
+  document_type: string;
+  filename: string;
+  packet_id: string;
+}
+
+export interface Report {
+  _id: string;
+  report_id: string;
+  reporter: {
+    role: string;
+    identifier: string;
+    name?: string | null;
+  };
+  analysis: any;
+  media_file_id?: string | null;
+  media_hash?: string | null;
+  media_filename?: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  custody_log: CustodyLogItem[];
+  reanalysis_history?: ReanalysisItem[];
+  legal_documents?: LegalDocument[];
+  admin_notes?: string | null;
+}
+
+const BACKEND_BASE_URL = "http://127.0.0.1:8000";
+
+export async function submitReport(
+  role: string,
+  identifier: string,
+  name: string,
+  analysis: any,
+  file?: File
+): Promise<{ success: boolean; report_id: string; status: string; message: string }> {
+  const formData = new FormData();
+  formData.append("reporter_role", role);
+  formData.append("reporter_identifier", identifier);
+  formData.append("reporter_name", name);
+  formData.append("analysis_json", JSON.stringify(analysis));
+  if (file) {
+    formData.append("file", file);
+  }
+
+  const response = await fetch(`${BACKEND_BASE_URL}/api/reports/submit`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(errorData.detail || `Failed to submit report: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function listReports(params: {
+  role?: string;
+  identifier?: string;
+  status?: string;
+  limit?: number;
+} = {}): Promise<{ reports: Report[] }> {
+  const query = new URLSearchParams();
+  if (params.role) query.append("role", params.role);
+  if (params.identifier) query.append("identifier", params.identifier);
+  if (params.status) query.append("status", params.status);
+  if (params.limit) query.append("limit", String(params.limit));
+
+  const response = await fetch(`${BACKEND_BASE_URL}/api/reports?${query.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to list reports: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function getReport(reportId: string): Promise<{ report: Report }> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/reports/${reportId}`);
+  if (!response.ok) {
+    throw new Error(`Failed to get report: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function updateReportStatus(
+  reportId: string,
+  status: string,
+  adminNotes?: string
+): Promise<{ success: boolean; report: Report }> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/reports/${reportId}/status`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ status, admin_notes: adminNotes }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to update status: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function reanalyzeReport(
+  reportId: string
+): Promise<{ success: boolean; new_analysis: any; report: Report }> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/reports/${reportId}/reanalyze`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(errorData.detail || `Failed to re-evaluate media: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function generateReportLegalDocs(
+  reportId: string
+): Promise<{ success: boolean; documents: LegalDocument[]; packet_id: string }> {
+  const response = await fetch(`${BACKEND_BASE_URL}/api/reports/${reportId}/generate-legal-docs`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(errorData.detail || `Failed to generate legal docs: ${response.status}`);
+  }
+  return response.json();
+}
+
+export function getLegalDocDownloadUrl(reportId: string, packetId: string, filename: string): string {
+  return `${BACKEND_BASE_URL}/api/reports/${reportId}/documents/${packetId}/${filename}`;
+}

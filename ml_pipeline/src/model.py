@@ -13,8 +13,9 @@ class DeepfakeClassifier(nn.Module):
             
         # Modify the final layer for binary classification
         num_ftrs = self.model._fc.in_features
+        dropout_p = getattr(config, "HEAD_DROPOUT", 0.3)
         self.model._fc = nn.Sequential(
-            nn.Dropout(p=config.HEAD_DROPOUT),
+            nn.Dropout(p=dropout_p),
             nn.Linear(num_ftrs, 2),
         )
         

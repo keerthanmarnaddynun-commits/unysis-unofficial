@@ -44,6 +44,9 @@ export function AnalysisResult({ onContinue, onBack, sourceInfo, data }: Analysi
   const streams = detection.streams || {}
   const legalReportUrl = data?.legal_report_url
   const factCheck = data?.fact_check || {}
+  const isVideo = data?.media_type === "video" || 
+                  sourceInfo?.localPreviewUrl?.match(/\.(mp4|webm|ogg|mov|mkv|avi|m4v)/i) ||
+                  (data?.file_name || "").match(/\.(mp4|webm|ogg|mov|mkv|avi|m4v)/i);
   
   const getRiskColor = (level: string) => {
     switch (level) {
@@ -69,7 +72,7 @@ export function AnalysisResult({ onContinue, onBack, sourceInfo, data }: Analysi
   // Handle PDF Download
   const handleDownloadReport = () => {
     if (legalReportUrl) {
-      const fullUrl = `http://127.0.0.1:5001${legalReportUrl}`
+      const fullUrl = `http://127.0.0.1:8000${legalReportUrl}`
       window.open(fullUrl, "_blank")
     }
   }
@@ -376,32 +379,45 @@ export function AnalysisResult({ onContinue, onBack, sourceInfo, data }: Analysi
               <CardContent className="p-6 space-y-6">
                 
                 {/* Media Preview Box with Scanning Effect */}
-                <div className="relative aspect-video bg-[#0b0f19] border border-[#1e293b] rounded-xl overflow-hidden group">
-                  <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-black flex items-center justify-center">
-                    {detection.gradcam_url ? (
-                      <img 
-                        src={`http://127.0.0.1:5001${detection.gradcam_url}`} 
-                        alt="Grad-CAM Forensic Overlay" 
-                        className="w-full h-full object-cover"
+                <div className="relative aspect-video bg-[#0b0f19] border border-[#1e293b] rounded-xl overflow-hidden group flex items-center justify-center">
+                  {sourceInfo?.localPreviewUrl ? (
+                    isVideo ? (
+                      <video 
+                        src={sourceInfo.localPreviewUrl} 
+                        className="w-full h-full object-contain" 
+                        controls
+                        playsInline
                       />
                     ) : (
-                      <div className="text-center space-y-3">
-                        <div className="w-14 h-14 rounded-full bg-slate-800/80 flex items-center justify-center mx-auto border border-slate-700">
-                          <button 
-                            onClick={() => setIsPlaying(!isPlaying)}
-                            className="hover:scale-110 transition-transform text-white"
-                          >
-                            {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
-                          </button>
-                        </div>
-                        <p className="text-xs text-slate-400 font-semibold">{data?.file?.name || data?.file_name || "media_preview"}</p>
+                      <img 
+                        src={sourceInfo.localPreviewUrl} 
+                        alt="Ingested Media Preview" 
+                        className="w-full h-full object-contain"
+                      />
+                    )
+                  ) : detection.gradcam_url ? (
+                    <img 
+                      src={`http://127.0.0.1:8000${detection.gradcam_url}`} 
+                      alt="Grad-CAM Forensic Overlay" 
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <div className="text-center space-y-3">
+                      <div className="w-14 h-14 rounded-full bg-slate-800/80 flex items-center justify-center mx-auto border border-slate-700">
+                        <button 
+                          onClick={() => setIsPlaying(!isPlaying)}
+                          className="hover:scale-110 transition-transform text-white"
+                        >
+                          {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
+                        </button>
                       </div>
-                    )}
-                  </div>
+                      <p className="text-xs text-slate-400 font-semibold">{data?.file?.name || data?.file_name || "media_preview"}</p>
+                    </div>
+                  )}
 
                   {/* Tamper Scan lines */}
                   {isFake && (
-                    <div className="absolute inset-0 overflow-hidden rounded-lg pointer-events-none">
+                    <div className="absolute inset-x-0 top-0 overflow-hidden h-full pointer-events-none">
                       <div className="w-full h-0.5 bg-red-500/50 shadow-[0_0_10px_#ef4444] animate-scan-line" />
                       <div className="absolute top-4 left-4 bg-red-500/90 text-white font-bold text-[10px] px-2 py-0.5 rounded shadow-[0_0_10px_rgba(239,68,68,0.4)]">
                         SYNTHETIC PATTERN DETECTED

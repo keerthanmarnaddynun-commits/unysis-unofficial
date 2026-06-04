@@ -30,11 +30,15 @@ from ml.config import (
 )
 from ml.inference import predict_video
 from ml.model_loader import get_model
+from factcheck.pipeline import run_factcheck_pipeline
 from utils.legal import generate_legal_notice
 from utils.metadata import create_metadata
 from pymongo import MongoClient
 import certifi
 from pydantic import BaseModel
+
+from report_service import ReportService
+from report_routes import router as report_router, set_report_service, set_img_models
 
 
 from dotenv import load_dotenv
@@ -54,7 +58,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(report_router)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+# Report service singleton
+_report_service = ReportService()
 
 MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024
 MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024
@@ -86,7 +94,7 @@ def _write_temp_file(content: bytes, suffix: str) -> str:
 IMG_MODELS = {}
 
 @app.on_event("startup")
-def startup_event() -> None:
+async def startup_event() -> None:
     import torch
     device = resolve_device(None)
     cnn_model, _ = load_cnn_model(Path(DEFAULT_CNN_MODEL), device)
@@ -112,6 +120,20 @@ def startup_event() -> None:
         "dataset_std": dataset_std,
         "radial_mask": radial_mask,
     })
+
+    # Initialize report service with MongoDB
+    try:
+        await _report_service.init()
+        set_report_service(_report_service)
+        set_img_models(IMG_MODELS)
+        LOGGER.info("Report service initialized successfully")
+    except Exception as exc:
+        LOGGER.warning("Report service init failed (reports disabled): %s", exc)
+
+
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    await _report_service.close()
 
 
 class LoginRequest(BaseModel):
@@ -226,6 +248,10 @@ async def analyze(file: UploadFile = File(...)):
                 # Fusion branch
                 "fusion_prediction": str(getattr(res, "label_final", "")).capitalize(),
                 "fusion_probability": float(getattr(res, "prob_final", 0.0)),
+                "fact_check": {
+                    "available": False,
+                    "note": "Fact-checking is not available for image files."
+                }
             })
         else:
             pred = predict_video(tmp_path)
@@ -235,6 +261,15 @@ async def analyze(file: UploadFile = File(...)):
             metadata = create_metadata(tmp_path, result, confidence)
             notice = generate_legal_notice(metadata)
             metadata["legal_notice"] = notice if notice else ""
+            metadata["media_type"] = "video"
+            
+            try:
+                factcheck_res = run_factcheck_pipeline(tmp_path, media_type="video")
+                metadata["fact_check"] = factcheck_res
+            except Exception as e:
+                LOGGER.exception("Fact-check pipeline failed: %s", e)
+                metadata["fact_check"] = {"available": False, "warnings": [str(e)]}
+
             return JSONResponse(content=metadata)
     except HTTPException:
         raise

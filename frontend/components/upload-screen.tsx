@@ -14,13 +14,14 @@ export interface SourceInfo {
   username?: string
   originalUrl?: string
   verified: boolean
+  localPreviewUrl?: string
 }
 
 interface UploadScreenProps {
   mode: "file" | "url"
   initialUrl?: string
   onBack: () => void
-  onAnalyze: (data: any) => void
+  onAnalyze: (data: any, file: File | null) => void
 }
 
 type ProcessingStep = {
@@ -167,9 +168,10 @@ export function UploadScreen({ mode, initialUrl = "", onBack, onAnalyze }: Uploa
             platform: platform || undefined,
             username: username || undefined,
             originalUrl: originalUrl || undefined,
-            verified: false
+            verified: false,
+            localPreviewUrl: URL.createObjectURL(file)
           }
-        })
+        }, file)
 
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : "Unknown error occurred";
@@ -213,9 +215,10 @@ export function UploadScreen({ mode, initialUrl = "", onBack, onAnalyze }: Uploa
             platform: detected.platform || "WebStream",
             username: detected.username || undefined,
             originalUrl: url,
-            verified: true
+            verified: true,
+            localPreviewUrl: url
           }
-        })
+        }, fetchedFile)
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : "Unknown error occurred";
         console.error("Analysis error:", err)
