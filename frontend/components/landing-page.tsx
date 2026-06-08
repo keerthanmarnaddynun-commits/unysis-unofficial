@@ -1,6 +1,6 @@
 "use client"
 
-import { Shield, Upload, Link, Play, ArrowRight, CheckCircle, Search, Scale, FileWarning, LogOut, Activity, FileText } from "lucide-react"
+import { Shield, Upload, Link, ArrowRight, CheckCircle, Search, Scale, FileWarning, LogOut, Activity, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import NextLink from "next/link"
@@ -10,15 +10,15 @@ interface LandingPageProps {
   userRole: Role
   onUploadClick: () => void
   onUrlClick: () => void
-  onDemoClick: () => void
   onHowItWorksClick: () => void
+  onResourcesClick: () => void
   onViewDashboardClick?: () => void
   onViewMetricsClick: () => void
   onViewMyReportsClick: () => void
   onLogout: () => void
 }
 
-export function LandingPage({ userRole, onUploadClick, onUrlClick, onDemoClick, onHowItWorksClick, onViewDashboardClick, onViewMetricsClick, onViewMyReportsClick, onLogout }: LandingPageProps) {
+export function LandingPage({ userRole, onUploadClick, onUrlClick, onHowItWorksClick, onResourcesClick, onViewDashboardClick, onViewMetricsClick, onViewMyReportsClick, onLogout }: LandingPageProps) {
   const steps = [
     { icon: Upload, label: "Upload", description: "Submit media" },
     { icon: Search, label: "Analyze", description: "AI verification" },
@@ -44,11 +44,11 @@ export function LandingPage({ userRole, onUploadClick, onUrlClick, onDemoClick, 
             <nav className="hidden md:flex items-center gap-6">
               <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">About</a>
               <button onClick={onHowItWorksClick} className="text-sm text-muted-foreground hover:text-foreground transition-colors">How it Works</button>
-              <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Resources</a>
+              <button onClick={onResourcesClick} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Resources</button>
               
               <span className="h-4 w-px bg-border hidden lg:inline" />
               
-              {/* Metrics button */}
+              {/* Metrics button - shown for all authenticated users */}
               <button 
                 onClick={onViewMetricsClick}
                 className="text-sm text-muted-foreground hover:text-sky-400 transition-colors flex items-center gap-1.5"
@@ -57,7 +57,7 @@ export function LandingPage({ userRole, onUploadClick, onUrlClick, onDemoClick, 
                 <span>Metrics</span>
               </button>
               
-              {/* My Reports button */}
+              {/* My Reports button - shown for all authenticated users */}
               <button 
                 onClick={onViewMyReportsClick}
                 className="text-sm text-muted-foreground hover:text-emerald-400 transition-colors flex items-center gap-1.5"
@@ -66,7 +66,7 @@ export function LandingPage({ userRole, onUploadClick, onUrlClick, onDemoClick, 
                 <span>My Reports</span>
               </button>
               
-              {/* Authority Dashboard button */}
+              {/* Authority Dashboard button - shown only for Authority role */}
               {userRole === "Authority" && onViewDashboardClick && (
                 <button 
                   onClick={onViewDashboardClick}
@@ -136,15 +136,6 @@ export function LandingPage({ userRole, onUploadClick, onUrlClick, onDemoClick, 
             >
               <Link className="w-5 h-5" />
               Paste URL
-            </Button>
-            <Button 
-              size="lg" 
-              variant="ghost" 
-              onClick={onDemoClick}
-              className="w-full sm:w-auto gap-2 text-muted-foreground hover:text-foreground"
-            >
-              <Play className="w-5 h-5" />
-              View Demo Case
             </Button>
           </div>
         </div>

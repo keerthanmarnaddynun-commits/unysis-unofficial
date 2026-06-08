@@ -56,10 +56,7 @@ export function MyReports({
   const fetchUserReports = async () => {
     setLoadingList(true)
     try {
-      const res = await listReports({
-        role: userRole,
-        identifier: userIdentifier
-      })
+      const res = await listReports({})
       setReports(res.reports)
       
       // Update selected report if it exists in the list to get fresh data

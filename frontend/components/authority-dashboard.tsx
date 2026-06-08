@@ -80,8 +80,6 @@ export function AuthorityDashboard({
     setLoadingList(true)
     try {
       const res = await listReports({
-        role: userRole,
-        identifier: userIdentifier,
         status: statusFilter !== "all" ? statusFilter : undefined
       })
       setReports(res.reports)
@@ -518,42 +516,165 @@ export function AuthorityDashboard({
                 </Card>
               </div>
 
-              {/* Analysis Scores */}
-              <Card className="bg-[#0f172a] border-[#1e293b]">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-slate-300">AI Neural Inferences</CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                  <div className="p-3 bg-[#0b0f19] rounded-lg border border-slate-800">
-                    <div className="text-lg font-bold text-white">
-                      {selectedReport.analysis?.final_prediction || selectedReport.analysis?.prediction || "N/A"}
+              {/* Side-by-Side Analysis Comparison */}
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Left Column: Original Inferences */}
+                <Card className="bg-[#0f172a] border-[#1e293b]">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-slate-300 flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-blue-400" />
+                      <span>Original Inferences</span>
+                    </CardTitle>
+                    <CardDescription className="text-xs text-slate-500">
+                      Immutable forensic metrics from initial ingestion
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 bg-[#0b0f19] rounded-lg border border-slate-800 text-center">
+                        <div className="text-lg font-bold text-white">
+                          {selectedReport.analysis?.final_prediction || selectedReport.analysis?.prediction || "N/A"}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">Ensemble Verdict</div>
+                      </div>
+                      <div className="p-3 bg-[#0b0f19] rounded-lg border border-slate-800 text-center">
+                        <div className="text-lg font-bold text-white">
+                          {formatConfidence(selectedReport.analysis?.confidence)}%
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">Confidence</div>
+                      </div>
                     </div>
-                    <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">Ensemble Verdict</div>
-                  </div>
-                  <div className="p-3 bg-[#0b0f19] rounded-lg border border-slate-800">
-                    <div className="text-lg font-bold text-white">
-                      {formatConfidence(selectedReport.analysis?.confidence)}%
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 bg-[#0b0f19] rounded-lg border border-slate-800 text-center">
+                        <div className="text-lg font-bold text-white">
+                          {selectedReport.analysis?.cnn_probability !== undefined 
+                            ? `${Math.round(selectedReport.analysis.cnn_probability * 100)}%` 
+                            : "N/A"}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">Spatial Texture</div>
+                      </div>
+                      <div className="p-3 bg-[#0b0f19] rounded-lg border border-slate-800 text-center">
+                        <div className="text-lg font-bold text-white">
+                          {selectedReport.analysis?.fft_probability !== undefined 
+                            ? `${Math.round(selectedReport.analysis.fft_probability * 100)}%` 
+                            : "N/A"}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">FFT Frequency</div>
+                      </div>
                     </div>
-                    <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">Confidence Score</div>
-                  </div>
-                  <div className="p-3 bg-[#0b0f19] rounded-lg border border-slate-800">
-                    <div className="text-lg font-bold text-white">
-                      {selectedReport.analysis?.cnn_probability !== undefined 
-                        ? `${Math.round(selectedReport.analysis.cnn_probability * 100)}%` 
-                        : "N/A"}
+                    <div className="p-3 bg-[#0b0f19] rounded-lg border border-slate-800">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">Ingested At</div>
+                      <div className="text-xs text-white">{new Date(selectedReport.created_at).toLocaleString()}</div>
                     </div>
-                    <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">Spatial Texture</div>
-                  </div>
-                  <div className="p-3 bg-[#0b0f19] rounded-lg border border-slate-800">
-                    <div className="text-lg font-bold text-white">
-                      {selectedReport.analysis?.fft_probability !== undefined 
-                        ? `${Math.round(selectedReport.analysis.fft_probability * 100)}%` 
-                        : "N/A"}
-                    </div>
-                    <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">FFT Frequency</div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+
+                {/* Right Column: Authority Forensic Re-evaluation */}
+                <Card className="bg-[#0f172a] border-[#1e293b]">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-slate-300 flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-primary" />
+                      <span>Authority Forensic Re-evaluation</span>
+                    </CardTitle>
+                    <CardDescription className="text-xs text-slate-500">
+                      Live evaluation metrics after authority re-analysis
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {selectedReport.reanalysis_history && selectedReport.reanalysis_history.length > 0 ? (
+                      (() => {
+                        const latestReanalysis = selectedReport.reanalysis_history[selectedReport.reanalysis_history.length - 1]
+                        const latestAnalysis = latestReanalysis.analysis
+                        return (
+                          <>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="p-3 bg-[#0b0f19] rounded-lg border border-primary/30 text-center">
+                                <div className="text-lg font-bold text-primary">
+                                  {latestAnalysis?.final_prediction || latestAnalysis?.prediction || "N/A"}
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">Ensemble Verdict</div>
+                              </div>
+                              <div className="p-3 bg-[#0b0f19] rounded-lg border border-primary/30 text-center">
+                                <div className="text-lg font-bold text-primary">
+                                  {formatConfidence(latestAnalysis?.confidence)}%
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">Confidence</div>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="p-3 bg-[#0b0f19] rounded-lg border border-primary/30 text-center">
+                                <div className="text-lg font-bold text-primary">
+                                  {latestAnalysis?.cnn_probability !== undefined 
+                                    ? `${Math.round(latestAnalysis.cnn_probability * 100)}%` 
+                                    : "N/A"}
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">Spatial Texture</div>
+                              </div>
+                              <div className="p-3 bg-[#0b0f19] rounded-lg border border-primary/30 text-center">
+                                <div className="text-lg font-bold text-primary">
+                                  {latestAnalysis?.fft_probability !== undefined 
+                                    ? `${Math.round(latestAnalysis.fft_probability * 100)}%` 
+                                    : "N/A"}
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-bold uppercase mt-1">FFT Frequency</div>
+                              </div>
+                            </div>
+                            <div className="p-3 bg-[#0b0f19] rounded-lg border border-primary/30">
+                              <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">Re-evaluated At</div>
+                              <div className="text-xs text-white">{new Date(latestReanalysis.performed_at).toLocaleString()}</div>
+                            </div>
+                          </>
+                        )
+                      })()
+                    ) : (
+                      <div className="p-6 text-center space-y-3">
+                        <div className="text-slate-500 text-sm">No re-evaluation performed yet</div>
+                        <Button
+                          onClick={handleReevaluate}
+                          disabled={reanalyzing}
+                          className="bg-primary hover:bg-primary/90 text-white gap-2"
+                        >
+                          {reanalyzing ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="w-4 h-4" />
+                              Trigger Re-analyze
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Re-evaluation Action Button (when re-analysis exists) */}
+              {selectedReport.reanalysis_history && selectedReport.reanalysis_history.length > 0 && (
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleReevaluate}
+                    disabled={reanalyzing}
+                    variant="outline"
+                    className="border-slate-700 text-slate-300 hover:bg-slate-800 gap-2"
+                  >
+                    {reanalyzing ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Re-analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-4 h-4" />
+                        Trigger New Re-analysis
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
 
               {/* Re-analysis / Re-evaluation History */}
               {selectedReport.reanalysis_history && selectedReport.reanalysis_history.length > 0 && (

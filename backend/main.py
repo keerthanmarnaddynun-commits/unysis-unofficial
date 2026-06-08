@@ -39,6 +39,7 @@ from pydantic import BaseModel
 
 from report_service import ReportService
 from report_routes import router as report_router, set_report_service, set_img_models
+from auth import create_access_token
 
 
 from dotenv import load_dotenv
@@ -50,10 +51,15 @@ setup_logging()
 LOGGER = logging.getLogger(__name__)
 
 app = FastAPI(title="BharatShield Backend", version="1.0.0")
-# Enable CORS for local development
+# Enable CORS for local development - include both localhost and 127.0.0.1 variants
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:4000",  # VibeStream platform port
+        "http://127.0.0.1:4000",  # VibeStream platform port
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -163,8 +169,18 @@ async def verify_login(request: LoginRequest):
         })
         
         if doc:
+            # Create JWT token
+            access_token = create_access_token(data={
+                "role": doc.get("role"),
+                "identifier": doc.get("official_id"),
+                "name": doc.get("name"),
+                "organization": doc.get("organization")
+            })
+            
             return {
                 "valid": True,
+                "access_token": access_token,
+                "token_type": "bearer",
                 "user": {
                     "role": doc.get("role"),
                     "official_id": doc.get("official_id"),

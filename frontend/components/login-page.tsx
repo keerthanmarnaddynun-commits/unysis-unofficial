@@ -13,10 +13,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export type Role = "Citizen" | "Journalist" | "Police" | "Authority"
 
 interface LoginPageProps {
-  onLogin: (role: Role, identifier: string, name: string, organization: string) => void
+  onLogin: (role: Role, identifier: string, name: string, organization: string, accessToken: string) => void
+  onResourcesClick?: () => void
 }
 
-export function LoginPage({ onLogin }: LoginPageProps) {
+export function LoginPage({ onLogin, onResourcesClick }: LoginPageProps) {
   const [role, setRole] = useState<Role>("Citizen")
   const [identifier, setIdentifier] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -53,7 +54,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           role,
           data.user.official_id || identifier,
           data.user.name || "Verified User",
-          data.user.organization || "Independent"
+          data.user.organization || "Independent",
+          data.access_token
         )
       } else {
         setError(data.message || "Invalid identification code for the selected role.")
@@ -67,16 +69,44 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md border-border/50 bg-card/50 backdrop-blur-sm shadow-xl">
-        <CardHeader className="space-y-4 items-center text-center pb-8">
-          <div className="p-3 bg-primary/10 rounded-2xl w-fit">
-            <Shield className="w-10 h-10 text-primary" />
+    <div className="min-h-screen flex flex-col bg-background">
+      {/* Header for unauthenticated state */}
+      <header className="border-b border-border px-6 py-4 bg-background/50 backdrop-blur-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Shield className="w-6 h-6 text-primary" />
+            </div>
+            <span className="text-xl font-semibold tracking-tight text-white">BharatShield</span>
           </div>
-          <div className="space-y-2">
-            <CardTitle className="text-2xl font-bold tracking-tight">
-              Welcome to BharatShield
-            </CardTitle>
+          
+          {/* Nav Items */}
+          <div className="flex items-center gap-6">
+            <nav className="hidden md:flex items-center gap-6">
+              <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">About</a>
+              <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">How it Works</a>
+              {onResourcesClick ? (
+                <button onClick={onResourcesClick} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Resources</button>
+              ) : (
+                <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Resources</a>
+              )}
+            </nav>
+          </div>
+        </div>
+      </header>
+
+      {/* Login Form */}
+      <div className="flex-1 flex flex-col items-center justify-center p-4">
+        <Card className="w-full max-w-md border-border/50 bg-card/50 backdrop-blur-sm shadow-xl">
+          <CardHeader className="space-y-4 items-center text-center pb-8">
+            <div className="p-3 bg-primary/10 rounded-2xl w-fit">
+              <Shield className="w-10 h-10 text-primary" />
+            </div>
+            <div className="space-y-2">
+              <CardTitle className="text-2xl font-bold tracking-tight">
+                Welcome to BharatShield
+              </CardTitle>
             <CardDescription className="text-base text-muted-foreground">
               Secure access for verified users
             </CardDescription>
@@ -127,6 +157,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           </form>
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }

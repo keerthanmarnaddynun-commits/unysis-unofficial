@@ -3,6 +3,8 @@ flask-cors
 fastapi
 uvicorn
 python-multipart
+python-jose[cryptography]
+passlib[bcrypt]
 
 torch
 torchvision

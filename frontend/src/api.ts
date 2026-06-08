@@ -138,17 +138,21 @@ export interface Report {
 
 const BACKEND_BASE_URL = "http://127.0.0.1:8000";
 
+// Helper to get auth headers
+function getAuthHeaders(): HeadersInit {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  const headers: HeadersInit = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
 export async function submitReport(
-  role: string,
-  identifier: string,
-  name: string,
   analysis: any,
   file?: File
 ): Promise<{ success: boolean; report_id: string; status: string; message: string }> {
   const formData = new FormData();
-  formData.append("reporter_role", role);
-  formData.append("reporter_identifier", identifier);
-  formData.append("reporter_name", name);
   formData.append("analysis_json", JSON.stringify(analysis));
   if (file) {
     formData.append("file", file);
@@ -156,6 +160,7 @@ export async function submitReport(
 
   const response = await fetch(`${BACKEND_BASE_URL}/api/reports/submit`, {
     method: "POST",
+    headers: getAuthHeaders(),
     body: formData,
   });
 
@@ -168,18 +173,16 @@ export async function submitReport(
 }
 
 export async function listReports(params: {
-  role?: string;
-  identifier?: string;
   status?: string;
   limit?: number;
 } = {}): Promise<{ reports: Report[] }> {
   const query = new URLSearchParams();
-  if (params.role) query.append("role", params.role);
-  if (params.identifier) query.append("identifier", params.identifier);
   if (params.status) query.append("status", params.status);
   if (params.limit) query.append("limit", String(params.limit));
 
-  const response = await fetch(`${BACKEND_BASE_URL}/api/reports?${query.toString()}`);
+  const response = await fetch(`${BACKEND_BASE_URL}/api/reports?${query.toString()}`, {
+    headers: getAuthHeaders(),
+  });
   if (!response.ok) {
     throw new Error(`Failed to list reports: ${response.status}`);
   }
@@ -187,7 +190,9 @@ export async function listReports(params: {
 }
 
 export async function getReport(reportId: string): Promise<{ report: Report }> {
-  const response = await fetch(`${BACKEND_BASE_URL}/api/reports/${reportId}`);
+  const response = await fetch(`${BACKEND_BASE_URL}/api/reports/${reportId}`, {
+    headers: getAuthHeaders(),
+  });
   if (!response.ok) {
     throw new Error(`Failed to get report: ${response.status}`);
   }
@@ -203,6 +208,7 @@ export async function updateReportStatus(
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
+      ...getAuthHeaders(),
     },
     body: JSON.stringify({ status, admin_notes: adminNotes }),
   });
@@ -218,6 +224,7 @@ export async function reanalyzeReport(
 ): Promise<{ success: boolean; new_analysis: any; report: Report }> {
   const response = await fetch(`${BACKEND_BASE_URL}/api/reports/${reportId}/reanalyze`, {
     method: "POST",
+    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -232,6 +239,7 @@ export async function generateReportLegalDocs(
 ): Promise<{ success: boolean; documents: LegalDocument[]; packet_id: string }> {
   const response = await fetch(`${BACKEND_BASE_URL}/api/reports/${reportId}/generate-legal-docs`, {
     method: "POST",
+    headers: getAuthHeaders(),
   });
 
   if (!response.ok) {
@@ -242,20 +250,33 @@ export async function generateReportLegalDocs(
 }
 
 export function getLegalDocDownloadUrl(reportId: string, packetId: string, filename: string): string {
-  return `${BACKEND_BASE_URL}/api/reports/${reportId}/documents/${packetId}/${filename}`;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  const url = `${BACKEND_BASE_URL}/api/reports/${reportId}/documents/${packetId}/${filename}`;
+  if (token) {
+    return `${url}?token=${token}`;
+  }
+  return url;
 }
 
 export async function sendTakedownNotice(
   reportId: string
-): Promise<{ success: boolean; message: string; takedown_status: string; vibestream_response?: any }> {
-  const response = await fetch(`${BACKEND_BASE_URL}/api/reports/${reportId}/send-takedown`, {
-    method: "POST",
-  });
+): Promise<{ success: boolean; message: string; takedown_status: string; vibestream_response?: any; warning?: string }> {
+  try {
+    const response = await fetch(`${BACKEND_BASE_URL}/api/reports/${reportId}/send-takedown`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new Error(errorData.detail || `Failed to send takedown notice: ${response.status}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(errorData.detail || `Failed to send takedown notice: ${response.status}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof TypeError && error.message === "Failed to fetch") {
+      throw new Error("Unable to connect to BharatShield backend. Please ensure the backend server is running on http://127.0.0.1:8000");
+    }
+    throw error;
   }
-
-  return response.json();
 }

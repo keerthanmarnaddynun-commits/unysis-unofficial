@@ -112,6 +112,7 @@ class ReportService:
         media_file_id: str | None,
         media_hash: str | None,
         media_filename: str | None,
+        source_url: str | None = None,
     ) -> dict[str, Any]:
         """Create a new deepfake report in MongoDB."""
         now = _now_ist()
@@ -128,6 +129,7 @@ class ReportService:
             "media_file_id": media_file_id,
             "media_hash": media_hash,
             "media_filename": media_filename,
+            "source_url": source_url,  # Store the original source URL from VibeStream
             "status": "pending_review",
             "legal_documents": [],
             "created_at": now,
@@ -164,9 +166,22 @@ class ReportService:
         query: dict[str, Any] = {}
         if status:
             query["status"] = status
-        if role and role != "Authority":
+        
+        # Debug logging
+        print(f"[DEBUG] list_reports - role: '{role}' (type: {type(role)}), reporter_identifier: {reporter_identifier}")
+        
+        # Authority users see all reports (case-insensitive check)
+        is_authority = role and role.lower() == "authority"
+        print(f"[DEBUG] is_authority: {is_authority}")
+        
+        if role and not is_authority:
             # Non-authority users only see their own reports
             query["reporter.identifier"] = reporter_identifier
+            print(f"[DEBUG] Adding reporter.identifier filter: {reporter_identifier}")
+        else:
+            print(f"[DEBUG] Authority user detected - returning ALL reports (no reporter filter)")
+        
+        print(f"[DEBUG] Final MongoDB query: {query}")
 
         cursor = self._db.reports.find(query).sort("created_at", -1).limit(limit)
         reports = []

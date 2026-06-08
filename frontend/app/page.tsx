@@ -12,8 +12,9 @@ import { AuthorityDashboard } from "@/components/authority-dashboard"
 import { MetricsDashboard } from "@/components/metrics-dashboard"
 import HowItWorksPage from "./how-it-works/page"
 import { MyReports } from "@/components/my-reports"
+import { ResourcesPage } from "@/components/resources-page"
 
-type Screen = "landing" | "upload-file" | "upload-url" | "analysis" | "role-output" | "confirmation" | "how-it-works" | "authority-dashboard" | "metrics-dashboard" | "my-reports"
+type Screen = "landing" | "upload-file" | "upload-url" | "analysis" | "role-output" | "confirmation" | "how-it-works" | "authority-dashboard" | "metrics-dashboard" | "my-reports" | "resources"
 
 function MainApp({ initialScreen, initialUrl: propInitialUrl }: { initialScreen?: Screen; initialUrl?: string }) {
   const searchParams = useSearchParams()
@@ -24,6 +25,7 @@ function MainApp({ initialScreen, initialUrl: propInitialUrl }: { initialScreen?
   const [userIdentifier, setUserIdentifier] = useState("")
   const [userName, setUserName] = useState("")
   const [userOrganization, setUserOrganization] = useState("")
+  const [accessToken, setAccessToken] = useState("")
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [initialUrl, setInitialUrl] = useState("")
   const [analysisData, setAnalysisData] = useState<any>(null)
@@ -42,49 +44,41 @@ function MainApp({ initialScreen, initialUrl: propInitialUrl }: { initialScreen?
     }
   }, [sourceUrl])
 
-  const handleLogin = (role: Role, identifier: string, name: string, organization: string) => {
+  const handleLogin = (role: Role, identifier: string, name: string, organization: string, token: string) => {
     setUserRole(role)
     setUserIdentifier(identifier)
     setUserName(name)
     setUserOrganization(organization)
+    setAccessToken(token)
+    // Store token in localStorage for persistence
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('access_token', token)
+    }
   }
 
   const navigateTo = (screen: Screen) => {
     setCurrentScreen(screen)
   }
 
-  const handleDemo = () => {
-    // Skip to analysis screen for demo
-    setUploadedFile(null)
-    setAnalysisData({
-      media_type: "image",
-      prediction: "Fake",
-      final_prediction: "Fake",
-      confidence: 0.92,
-      reliability: "High consistency indicators",
-      reason: "Synthetically modified pixels in facial region",
-      hash: "a7f8c3d2e9b1f5a6c8d4e2b7f9a3c5d8e1b4f6a9c2d5e8b1f3a6c9d2e5b8f1a4",
-      file_name: "vibe_stream_image.png",
-      cnn_probability: 0.94,
-      fft_probability: 0.89,
-      fusion_probability: 0.92
-    })
-    setCurrentScreen("analysis")
-  }
 
   const handleLogout = () => {
     setUserRole(null)
     setUserIdentifier("")
     setUserName("")
     setUserOrganization("")
+    setAccessToken("")
     setUploadedFile(null)
     setAnalysisData(null)
     setSubmittedReportInfo(null)
     setCurrentScreen("landing")
+    // Clear token from localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('access_token')
+    }
   }
 
   if (!userRole) {
-    return <LoginPage onLogin={handleLogin} />
+    return <LoginPage onLogin={handleLogin} onResourcesClick={() => navigateTo("resources")} />
   }
 
   return (
@@ -94,8 +88,8 @@ function MainApp({ initialScreen, initialUrl: propInitialUrl }: { initialScreen?
           userRole={userRole}
           onUploadClick={() => navigateTo("upload-file")}
           onUrlClick={() => navigateTo("upload-url")}
-          onDemoClick={handleDemo}
           onHowItWorksClick={() => navigateTo("how-it-works")}
+          onResourcesClick={() => navigateTo("resources")}
           onViewDashboardClick={() => navigateTo("authority-dashboard")}
           onViewMetricsClick={() => navigateTo("metrics-dashboard")}
           onViewMyReportsClick={() => navigateTo("my-reports")}
@@ -190,6 +184,10 @@ function MainApp({ initialScreen, initialUrl: propInitialUrl }: { initialScreen?
           userName={userName}
           onBack={() => navigateTo("landing")}
         />
+      )}
+
+      {currentScreen === "resources" && (
+        <ResourcesPage onBack={() => navigateTo("landing")} />
       )}
     </div>
   )
