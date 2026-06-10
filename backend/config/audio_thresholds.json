@@ -1,0 +1,4 @@
+{
+    "FAKE_THRESHOLD": 0.85,
+    "REAL_THRESHOLD": 0.65
+}

@@ -14,6 +14,7 @@ export interface SourceInfo {
   username?: string
   originalUrl?: string
   verified: boolean
+  url?: string
 }
 
 interface UploadScreenProps {
@@ -158,13 +159,16 @@ export function UploadScreen({ mode, initialUrl = "", onBack, onAnalyze }: Uploa
         }
 
         const data = await analyzeFile(file)
+        
+        const fileUrl = URL.createObjectURL(file);
 
         // Pass raw backend response forward
         onAnalyze({
           ...data,
           sourceInfo: {
             type: "file",
-            verified: false
+            verified: false,
+            url: fileUrl
           }
         })
 

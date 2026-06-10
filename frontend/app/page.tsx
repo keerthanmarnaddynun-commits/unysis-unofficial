@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation"
 import { LandingPage } from "@/components/landing-page"
 import { UploadScreen } from "@/components/upload-screen"
 import { AnalysisResult } from "@/components/analysis-result"
+import { VideoAnalysisResult } from "@/components/video-analysis-result"
 import { RoleBasedOutput } from "@/components/role-based-output"
 import { ActionConfirmation } from "@/components/action-confirmation"
 import { LoginPage, type Role, getStoredUser } from "@/components/login-page"
@@ -102,12 +103,37 @@ function MainApp() {
       )}
 
       {currentScreen === "analysis" && (
+        analysisData?.metrics ? (
+          <VideoAnalysisResult
+            data={analysisData}
+            sourceInfo={analysisData?.sourceInfo}
+            onContinue={() => navigateTo("role-output")}
+            onBack={() => {
+              console.log("[BACK CLICKED]");
+              console.log("[currentView before]", currentScreen);
+              console.log("[userRole before]", userRole);
+              setAnalysisData(null);
+              console.log("[analysisData cleared]");
+              navigateTo("upload-file");
+              console.log("[navigated upload-file]");
+            }}
+          />
+        ) : (
           <AnalysisResult
             data={analysisData}
             sourceInfo={analysisData?.sourceInfo}
             onContinue={() => navigateTo("role-output")}
-            onBack={() => navigateTo("landing")}
+            onBack={() => {
+              console.log("[BACK CLICKED]");
+              console.log("[currentView before]", currentScreen);
+              console.log("[userRole before]", userRole);
+              setAnalysisData(null);
+              console.log("[analysisData cleared]");
+              navigateTo("upload-file");
+              console.log("[navigated upload-file]");
+            }}
           />
+        )
       )}
 
       {currentScreen === "role-output" && userRole && (

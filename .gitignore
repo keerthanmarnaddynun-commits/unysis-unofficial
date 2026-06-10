@@ -158,3 +158,9 @@ fft/fft_env/
 fft/fft_output/
 training_output/
 .model_cache/
+intermediate files/
+intermediate txt files/
+DeepfakeBench/
+SRM dataset/
+MesoNet/
+mesonet_saved_model/
