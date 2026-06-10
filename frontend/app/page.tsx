@@ -142,7 +142,12 @@ function MainApp({ initialScreen, initialUrl: propInitialUrl }: { initialScreen?
           uploadedFile={uploadedFile}
           onAction={(reportInfo) => {
             setSubmittedReportInfo(reportInfo)
-            navigateTo("confirmation")
+            // For Authority users, navigate to authority dashboard
+            if (userRole === "Authority") {
+              navigateTo("authority-dashboard")
+            } else {
+              navigateTo("confirmation")
+            }
           }}
           onBack={() => navigateTo("analysis")}
         />

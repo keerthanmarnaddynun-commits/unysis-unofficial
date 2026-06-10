@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import {
-  ArrowLeft,
   Shield,
   ShieldAlert,
   Search,
@@ -38,6 +37,7 @@ import {
   sendTakedownNotice,
   type Report
 } from "../src/api"
+import { UnifiedHeader } from "@/components/unified-header"
 
 interface AuthorityDashboardProps {
   userRole: string
@@ -268,30 +268,13 @@ export function AuthorityDashboard({
   )
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0b0f19] text-[#e2e8f0]">
-      {/* Header */}
-      <header className="border-b border-[#1e293b] px-6 py-4 bg-[#0f172a]/80 sticky top-0 z-50 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={onBack} className="text-[#94a3b8] hover:text-white hover:bg-slate-800">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Home
-            </Button>
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Shield className="w-5 h-5 text-primary" />
-              </div>
-              <span className="font-semibold text-white">BharatShield</span>
-            </div>
-            <span className="text-[#475569]">/</span>
-            <span className="text-[#94a3b8]">Authority Case Ledger</span>
-          </div>
-          
-          <div className="text-xs text-[#94a3b8] font-medium bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">
-            Officer: <span className="text-white font-semibold">{userName} ({userOrganization})</span>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+      <UnifiedHeader
+        title="BharatShield"
+        subtitle="Authority Case Ledger"
+        showBack={true}
+        onBack={onBack}
+      />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -299,8 +282,8 @@ export function AuthorityDashboard({
         {/* Left Column: Case Directory */}
         <div className="lg:col-span-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <Layers className="w-5 h-5 text-primary" />
+            <h2 className="text-xl font-bold text-white flex items-center gap-2 tracking-wide">
+              <Layers className="w-5 h-5 text-indigo-400" />
               <span>Case Directory</span>
             </h2>
             <Button variant="ghost" size="icon" onClick={fetchReports} className="text-slate-400 hover:text-white hover:bg-slate-800">

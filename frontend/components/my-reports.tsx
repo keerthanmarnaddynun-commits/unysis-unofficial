@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { 
-  ArrowLeft,
   Shield,
   Search,
   RefreshCw,
@@ -27,6 +26,7 @@ import {
   getLegalDocDownloadUrl,
   type Report 
 } from "../src/api"
+import { UnifiedHeader } from "@/components/unified-header"
 
 interface MyReportsProps {
   userRole: string
@@ -141,30 +141,13 @@ export function MyReports({
   const hiddenDocsCount = (selectedReport?.legal_documents?.length || 0) - visibleDocs.length
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0b0f19] text-[#e2e8f0]">
-      {/* Header */}
-      <header className="border-b border-[#1e293b] px-6 py-4 bg-[#0f172a]/80 sticky top-0 z-50 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={onBack} className="text-[#94a3b8] hover:text-white hover:bg-slate-800">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Home
-            </Button>
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Shield className="w-5 h-5 text-primary" />
-              </div>
-              <span className="font-semibold text-white">BharatShield</span>
-            </div>
-            <span className="text-[#475569]">/</span>
-            <span className="text-[#94a3b8]">My Reports</span>
-          </div>
-          
-          <div className="text-xs text-[#94a3b8] font-medium bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800">
-            User ID: <span className="text-white font-semibold">{userIdentifier} ({userRole})</span>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+      <UnifiedHeader
+        title="BharatShield"
+        subtitle="My Reports"
+        showBack={true}
+        onBack={onBack}
+      />
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -172,8 +155,8 @@ export function MyReports({
         {/* Left Column: Report List */}
         <div className="lg:col-span-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <Layers className="w-5 h-5 text-primary" />
+            <h2 className="text-xl font-bold text-white flex items-center gap-2 tracking-wide">
+              <Layers className="w-5 h-5 text-indigo-400" />
               <span>Report History</span>
             </h2>
             <Button variant="ghost" size="icon" onClick={fetchUserReports} className="text-slate-400 hover:text-white hover:bg-slate-800 animate-in spin-in-1">
@@ -188,26 +171,26 @@ export function MyReports({
               placeholder="Search by case ID or file name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 bg-[#0f172a] border-[#1e293b] text-white focus-visible:ring-primary"
+              className="pl-9 bg-slate-900/40 border-slate-800/80 text-white focus-visible:ring-indigo-500 backdrop-blur-md tracking-wide"
             />
           </div>
 
           {/* Report Directory List */}
-          <Card className="bg-[#0f172a] border-[#1e293b] overflow-hidden min-h-[400px]">
+          <Card className="bg-slate-900/40 border-slate-800/80 overflow-hidden min-h-[400px] backdrop-blur-md">
             <CardContent className="p-0 max-h-[600px] overflow-y-auto">
               {loadingList ? (
                 <div className="p-12 text-center text-slate-500 space-y-2">
-                  <RefreshCw className="w-8 h-8 animate-spin mx-auto text-primary" />
-                  <p className="text-xs">Fetching your secure custody cases...</p>
+                  <RefreshCw className="w-8 h-8 animate-spin mx-auto text-indigo-400" />
+                  <p className="text-xs tracking-wide">Fetching your secure custody cases...</p>
                 </div>
               ) : filteredReports.length === 0 ? (
                 <div className="p-12 text-center text-slate-500 space-y-2">
                   <AlertCircle className="w-8 h-8 mx-auto opacity-40 text-slate-400" />
-                  <p className="text-sm">No reports found.</p>
-                  <p className="text-xs text-slate-600">Reports you submit will appear here.</p>
+                  <p className="text-sm tracking-wide">No reports found.</p>
+                  <p className="text-xs text-slate-600 tracking-wide">Reports you submit will appear here.</p>
                 </div>
               ) : (
-                <div className="divide-y divide-[#1e293b]">
+                <div className="divide-y divide-slate-800/80">
                   {filteredReports.map((report) => {
                     const isSelected = selectedReport?.report_id === report.report_id
                     const predictionLabel = report.analysis?.final_prediction || report.analysis?.prediction || "Unknown"
