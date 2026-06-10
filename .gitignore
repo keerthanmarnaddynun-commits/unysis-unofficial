@@ -191,3 +191,7 @@ video_evidence_frames/
 train_aasist_official_finetune.py
 *.mp4
 *.zip
+
+train_log*_utf8.txt
+fft/train_log*_utf8.txt
+fft_pipeline_analysis.md
