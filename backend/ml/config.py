@@ -2,8 +2,6 @@ import logging
 import os
 from pathlib import Path
 
-import torch
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -29,7 +27,7 @@ IMAGE_SIZE = (224, 224)
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 
 def setup_logging() -> None:

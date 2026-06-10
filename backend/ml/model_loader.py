@@ -4,13 +4,11 @@ from pathlib import Path
 from threading import Lock
 from typing import Optional
 
-import torch
-
-from .config import DEVICE, MODEL_PATH
+from .config import MODEL_PATH
 
 
 LOGGER = logging.getLogger(__name__)
-_MODEL: Optional[torch.nn.Module] = None
+_MODEL = None
 _MODEL_LOCK = Lock()
 
 
@@ -24,7 +22,7 @@ def _load_model_class():
     return DeepfakeClassifier
 
 
-def get_model() -> torch.nn.Module:
+def get_model():
     global _MODEL
 
     if _MODEL is not None:
@@ -37,19 +35,22 @@ def get_model() -> torch.nn.Module:
         if not MODEL_PATH.exists():
             raise FileNotFoundError(f"Model weights not found: {MODEL_PATH}")
 
+        import torch
+        device = get_device()
         DeepfakeClassifier = _load_model_class()
-        model = DeepfakeClassifier(pretrained=False).to(DEVICE)
+        model = DeepfakeClassifier(pretrained=False).to(device)
 
-        checkpoint = torch.load(MODEL_PATH, map_location=DEVICE)
+        checkpoint = torch.load(MODEL_PATH, map_location=device)
         state_dict = checkpoint.get("model_state_dict", checkpoint) if isinstance(checkpoint, dict) else checkpoint
         model.load_state_dict(state_dict)
         model.eval()
 
         _MODEL = model
-        LOGGER.info("Model loaded from %s on device %s", MODEL_PATH, DEVICE)
+        LOGGER.info("Model loaded from %s on device %s", MODEL_PATH, device)
         return _MODEL
 
 
-def get_device() -> torch.device:
-    return DEVICE
+def get_device():
+    import torch
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

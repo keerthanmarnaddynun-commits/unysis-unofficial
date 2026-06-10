@@ -1,27 +1,16 @@
-# test_pipeline.py
+import sys
+sys.path.append('.')
+from pathlib import Path
+from ml.audio_extractor import extract_audio
+from ml.audio_detector import analyze_audio
 
-from utils.metadata import create_metadata
-from utils.legal import generate_legal_notice
+print("Extracting...")
+meta = extract_audio(Path('../test_audio_video.mp4'))
+print("Extracted:", meta)
 
-# Dummy input
-file_path = "sample.jpg"
-result = "Fake"   # try "Real" also later
-confidence = 0.85
-
-# Step 1: Create metadata
-metadata = create_metadata(file_path, result, confidence)
-
-# Step 2: Generate legal notice
-notice = generate_legal_notice(metadata)
-
-# Print metadata
-print("\n--- METADATA ---")
-for key, value in metadata.items():
-    print(f"{key}: {value}")
-
-# Print legal notice (if exists)
-if notice:
-    print("\n--- LEGAL NOTICE ---")
-    print(notice)
+if meta.get("available") and "wav_path" in meta:
+    print(f"Analyzing {meta['wav_path']}...")
+    res = analyze_audio(Path(meta['wav_path']))
+    print("Analyzed:", res)
 else:
-    print("\nNo legal action required.")
+    print("Not available")
