@@ -795,18 +795,49 @@ export function AuthorityDashboard({
                   <CardTitle className="text-sm text-slate-300">Auditable Custody Log</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 max-h-[160px] overflow-y-auto">
-                  {selectedReport.custody_log.map((log, idx) => (
-                    <div key={idx} className="flex gap-3 text-xs leading-relaxed">
-                      <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-slate-300">{log.event}</span>
-                          <span className="text-[10px] text-slate-500 font-mono">{new Date(log.time).toLocaleTimeString()}</span>
+                  {(() => {
+                    const custodyItems = (selectedReport.custody_log || []).filter(
+                      (log) => log.event !== "Media re-evaluated by authority"
+                    ).map((log) => ({
+                      time: log.time,
+                      event: log.event,
+                      actor: log.actor,
+                    }));
+
+                    const reanalysisItems = (selectedReport.reanalysis_history || []).map((hist) => {
+                      const verdict = hist.analysis?.final_prediction || hist.analysis?.prediction || "Unknown";
+                      const rawConf = hist.analysis?.confidence;
+                      const conf = rawConf !== undefined
+                        ? rawConf <= 1
+                          ? Math.round(rawConf * 100)
+                          : Math.round(rawConf)
+                        : 85;
+                      return {
+                        time: hist.performed_at,
+                        event: `Media re-evaluated by authority (Verdict: ${verdict}, Confidence: ${conf}%)`,
+                        actor: hist.performed_by || "Authority",
+                      };
+                    });
+
+                    const displayLogs = [...custodyItems, ...reanalysisItems].sort(
+                      (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
+                    );
+
+                    return displayLogs.map((log, idx) => (
+                      <div key={idx} className="flex gap-3 text-xs leading-relaxed">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                        <div className="flex-1">
+                          <div className="flex justify-between items-center">
+                            <span className="font-semibold text-slate-300">{log.event}</span>
+                            <span className="text-[10px] text-slate-500 font-mono">
+                              {log.time ? new Date(log.time).toLocaleTimeString() : ""}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500">by {log.actor}</p>
                         </div>
-                        <p className="text-[10px] text-slate-500">by {log.actor}</p>
                       </div>
-                    </div>
-                  ))}
+                    ));
+                  })()}
                 </CardContent>
               </Card>
 
