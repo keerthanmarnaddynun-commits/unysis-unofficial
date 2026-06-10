@@ -17,7 +17,13 @@ Degrades gracefully: returns None if Whisper is not installed.
 import os
 import warnings
 
-from config import WHISPER_MODEL_SIZE
+try:
+    from ml.config import WHISPER_MODEL_SIZE
+except ImportError:
+    try:
+        from backend.ml.config import WHISPER_MODEL_SIZE
+    except ImportError:
+        WHISPER_MODEL_SIZE = "base"
 
 
 _whisper_model = None

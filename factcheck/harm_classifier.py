@@ -24,7 +24,14 @@ Labels:
 import os
 import torch
 
-from config import HARM_THRESHOLD, DEVICE
+try:
+    from ml.config import HARM_THRESHOLD, DEVICE
+except ImportError:
+    try:
+        from backend.ml.config import HARM_THRESHOLD, DEVICE
+    except ImportError:
+        HARM_THRESHOLD = 0.6
+        DEVICE = torch.device("cpu")
 
 _LABELS = [
     "hate speech targeting a community or religion",

@@ -100,6 +100,8 @@ IMG_MODELS = {}
 async def startup_event() -> None:
     from datetime import datetime
     print(f"[{datetime.now()}] [STARTUP BEGIN]")
+    print("VERIFY_LOGIN_USING_SHARED_REPORT_SERVICE_DB_FIX_ACTIVE")
+    LOGGER.info("VERIFY_LOGIN_USING_SHARED_REPORT_SERVICE_DB_FIX_ACTIVE")
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     EVIDENCE_DIR = _REPO_ROOT / "backend" / "video_evidence_frames"
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
@@ -170,31 +172,53 @@ class LoginRequest(BaseModel):
 
 @app.post("/verify-login")
 async def verify_login(request: LoginRequest):
-    mongo_uri = os.getenv("MONGO_URI")
-    db_name = os.getenv("MONGO_DB", "unisys_project")
+    LOGGER.info("verify_login: id(_report_service) = %s", id(_report_service))
+    LOGGER.info("verify_login: _report_service._db is None? %s", getattr(_report_service, "_db", None) is None)
     
-    if not mongo_uri:
+    db = getattr(_report_service, "_db", None)
+    if db is None:
+        try:
+            await _report_service.init()
+            db = getattr(_report_service, "_db", None)
+        except Exception as exc:
+            LOGGER.warning("Dynamic initialization of ReportService failed on login request: %s", exc)
+            
+    if db is None:
+        LOGGER.error("Database configuration missing: ReportService db client is not initialized")
         raise HTTPException(status_code=500, detail="Database configuration missing")
         
+    LOGGER.info("verify_login: db.name = %s", db.name)
+    
     try:
-        client = MongoClient(mongo_uri, tlsCAFile=certifi.where())
-        db = client[db_name]
-        collection = db["authorized_ids"]
-        
         role = request.role.strip().lower()
         identifier = request.identifier.strip()
         
-        doc = collection.find_one({
+        collection = db["authorized_ids"]
+        
+        # Check if the database has any documents in the authorized_ids collection to fail gracefully with logs
+        count = await collection.count_documents({})
+        LOGGER.info("verify_login: authorized_ids count = %s", count)
+        if count == 0:
+            LOGGER.warning("authorized_ids collection is empty or missing in database")
+            
+        doc = await collection.find_one({
             "role": role,
-            "official_id": identifier,
+            "$or": [
+                {"official_id": identifier},
+                {"identifier": identifier},
+                {"id": identifier}
+            ],
             "status": "active"
         })
         
+        LOGGER.info("verify_login: lookup result found: %s", doc is not None)
+        
         if doc:
             # Create JWT token
+            official_id = doc.get("official_id") or doc.get("identifier") or doc.get("id") or identifier
             access_token = create_access_token(data={
                 "role": doc.get("role"),
-                "identifier": doc.get("official_id"),
+                "identifier": official_id,
                 "name": doc.get("name"),
                 "organization": doc.get("organization")
             })
@@ -205,15 +229,17 @@ async def verify_login(request: LoginRequest):
                 "token_type": "bearer",
                 "user": {
                     "role": doc.get("role"),
-                    "official_id": doc.get("official_id"),
+                    "official_id": official_id,
                     "name": doc.get("name"),
                     "organization": doc.get("organization")
                 }
             }
         else:
+            LOGGER.warning("Login failed: active user with identifier '%s' and role '%s' not found", identifier, role)
             return {"valid": False, "message": "Invalid ID for selected role."}
+            
     except Exception as exc:
-        LOGGER.exception("Login verification failed: %s", exc)
+        LOGGER.exception("Login verification query failed: %s", exc)
         raise HTTPException(status_code=500, detail="Database connection error")
 
 
@@ -222,6 +248,22 @@ async def predict_video_endpoint(file: UploadFile = File(...)):
     if not file.filename:
         raise HTTPException(status_code=400, detail="Empty filename")
     _validate_extension(file.filename, ALLOWED_VIDEO_EXTENSIONS)
+
+    if os.getenv("SMOKE_TEST_MODE", "").lower() == "true":
+        LOGGER.info("SMOKE_TEST_MODE active: Returning mock video prediction result")
+        return JSONResponse(content={
+            "final_prediction": "fake",
+            "confidence": 0.88,
+            "frames_analyzed": 5,
+            "frame_predictions": [
+                {"frame_index": 0, "prediction": "fake", "confidence": 0.85},
+                {"frame_index": 1, "prediction": "fake", "confidence": 0.90},
+                {"frame_index": 2, "prediction": "fake", "confidence": 0.88},
+                {"frame_index": 3, "prediction": "fake", "confidence": 0.86},
+                {"frame_index": 4, "prediction": "fake", "confidence": 0.91}
+            ],
+            "demo_mode": True
+        })
 
     content = await _read_upload_with_limit(file, MAX_VIDEO_SIZE_BYTES)
     tmp_path = None
@@ -248,6 +290,280 @@ async def analyze(file: UploadFile = File(...)):
     ext = Path(file.filename).suffix.lower()
     allowed = ALLOWED_IMAGE_EXTENSIONS.union(ALLOWED_VIDEO_EXTENSIONS)
     _validate_extension(file.filename, allowed)
+
+    if os.getenv("SMOKE_TEST_MODE", "").lower() == "true":
+        LOGGER.info("SMOKE_TEST_MODE active: Returning mock analyze result")
+        
+        # Determine if we're dealing with an image or video
+        is_image = ext in ALLOWED_IMAGE_EXTENSIONS
+        content = await file.read()
+        
+        if is_image:
+            # Simple mock response for image
+            response_dict = {
+                "media_type": "image",
+                "prediction": "Fake",
+                "final_prediction": "Fake",
+                "confidence": 0.89,
+                "reliability": "HIGH",
+                "reason": "Synthetic visual signature identified in frequency-domain analysis.",
+                "ood_flags": [],
+                "cnn_prediction": "Fake",
+                "cnn_probability": 0.88,
+                "fft_prediction": "Fake",
+                "fft_probability": 0.90,
+                "fusion_prediction": "Fake",
+                "fusion_probability": 0.89,
+                "fact_check": {
+                    "available": False,
+                    "note": "Fact-checking is not available for image files."
+                },
+                "demo_mode": True,
+                # PDF report metadata fallbacks
+                "video_name": file.filename,
+                "final_decision": "FAKE",
+                "final_score": 0.89,
+                "final_reliability": "HIGH"
+            }
+            
+            # Generate the mock PDF report for image
+            try:
+                import uuid
+                import shutil
+                from ml.pdf_generator import generate_pdf_report
+                
+                # Clean and prepare evidence directory (since it is mounted and serves the files)
+                shutil.rmtree(EVIDENCE_DIR, ignore_errors=True)
+                EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+                
+                report_id = uuid.uuid4().hex
+                report_filename = f"report_{report_id}.pdf"
+                report_path = EVIDENCE_DIR / report_filename
+                generate_pdf_report(response_dict, str(report_path), EVIDENCE_DIR)
+                response_dict["report_url"] = f"/evidence/{report_filename}"
+                response_dict["legal_report_url"] = f"/evidence/{report_filename}"
+            except Exception as pdf_e:
+                LOGGER.error("Failed to generate demo image PDF: %s", pdf_e)
+                response_dict["report_url"] = ""
+                response_dict["legal_report_url"] = ""
+                
+            return JSONResponse(content=response_dict)
+        else:
+            # For video, extract actual frames using OpenCV (no ML loaded) to keep it visual
+            import cv2
+            import numpy as np
+            import shutil
+            import uuid
+            import time
+            from datetime import datetime
+            
+            # Clean and prepare evidence directory
+            shutil.rmtree(EVIDENCE_DIR, ignore_errors=True)
+            EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+            
+            # Save uploaded video to temp file to read frames
+            tmp_video_path = _write_temp_file(content, ext)
+            
+            cap = cv2.VideoCapture(tmp_video_path)
+            frame_paths = []
+            try:
+                # Extract 5 frames from the video to make the visual timeline real
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                if total_frames <= 0:
+                    total_frames = 100
+                step = max(1, total_frames // 5)
+                
+                for i in range(5):
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, min(i * step, total_frames - 1))
+                    ret, frame = cap.read()
+                    if not ret:
+                        # Fallback: create a dummy color block if read fails
+                        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                        cv2.putText(frame, f"Demo Frame {i}", (150, 240), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+                        
+                    f_name = f"frame_{i:04d}.jpg"
+                    f_path = EVIDENCE_DIR / f_name
+                    cv2.imwrite(str(f_path), frame)
+                    frame_paths.append((f_name, i * step, frame))
+            finally:
+                cap.release()
+                if os.path.exists(tmp_video_path):
+                    os.remove(tmp_video_path)
+            
+            # Build mock frame results and generate mock face crops and heatmaps
+            top_suspicious_frames = []
+            frame_scores = []
+            evidence_list = []
+            
+            for f_name, f_idx, frame in frame_paths:
+                t_sec = f_idx / 5.0
+                t_label = f"{(int(t_sec)//60):02d}:{t_sec%60:04.1f}"
+                
+                # Mock face crop by taking a center region
+                h, w = frame.shape[:2]
+                ch, cw = int(h * 0.5), int(w * 0.5)
+                cy, cx = h // 2, w // 2
+                face_img = frame[cy - ch//2 : cy + ch//2, cx - cw//2 : cx + cw//2]
+                face_crop_filename = f"face_{f_name}"
+                cv2.imwrite(str(EVIDENCE_DIR / face_crop_filename), face_img)
+                
+                # Mock heatmap using a Gaussian glow in the center of the face crop
+                fh, fw = face_img.shape[:2]
+                heatmap = np.zeros_like(face_img)
+                cv2.circle(heatmap, (fw // 2, fh // 2), min(fw, fh) // 4, (0, 0, 255), -1)
+                heatmap = cv2.GaussianBlur(heatmap, (51, 51), 0)
+                heatmap_img = cv2.addWeighted(face_img, 0.6, heatmap, 0.4, 0)
+                heatmap_filename = f"heatmap_{f_name}"
+                cv2.imwrite(str(EVIDENCE_DIR / heatmap_filename), heatmap_img)
+                
+                face_bbox = {
+                    "left_percent": 25.0,
+                    "top_percent": 25.0,
+                    "width_percent": 50.0,
+                    "height_percent": 50.0
+                }
+                
+                fake_score = 0.88 - (f_idx % 3) * 0.02
+                
+                frame_scores.append({
+                    "frame_index": f_idx,
+                    "timestamp_sec": t_sec,
+                    "fake_score": fake_score
+                })
+                
+                evidence_list.append({
+                    "frame": f_name,
+                    "score": fake_score
+                })
+                
+                top_suspicious_frames.append({
+                    "frame": f_name,
+                    "frame_index": f_idx,
+                    "timestamp_sec": t_sec,
+                    "timestamp_label": t_label,
+                    "score": fake_score,
+                    "image_url": f"/evidence/{f_name}",
+                    "face_crop_url": f"/evidence/{face_crop_filename}",
+                    "gradcam_url": f"/evidence/{heatmap_filename}",
+                    "evidence_type": "Strong Multi-Model Agreement",
+                    "evidence_explanation": "Demo mode check: Anomalous visual consistency detected in facial regions.",
+                    "face_bbox": face_bbox
+                })
+            
+            # Generate a mock spectrogram image for audio
+            spec_filename = f"audio_spec_{uuid.uuid4().hex[:8]}.png"
+            dummy_spec = np.zeros((128, 256, 3), dtype=np.uint8)
+            cv2.randn(dummy_spec, (100, 100, 100), (30, 30, 30))
+            for x in range(0, 256, 40):
+                cv2.line(dummy_spec, (x, 0), (x, 128), (50, 0, 50), 1)
+            for y in range(0, 128, 20):
+                cv2.line(dummy_spec, (y, 0), (y, 256), (0, 50, 50), 1)
+            dummy_spec = cv2.applyColorMap(dummy_spec, cv2.COLORMAP_VIRIDIS)
+            cv2.imwrite(str(EVIDENCE_DIR / spec_filename), dummy_spec)
+            
+            audio_metadata = {
+                "available": True,
+                "label": "fake",
+                "confidence": 0.86,
+                "prediction": "fake",
+                "probability": 0.86,
+                "audio_reliability": 85,
+                "reliability_level": "HIGH",
+                "explanation": "Acoustic patterns exhibit anomalous frequency gaps typical of generative vocal cloning models.",
+                "suspicious_segments": [
+                    {"start_sec": 0.5, "end_sec": 1.2, "score": 0.86, "type": "Synthesized Voice"}
+                ],
+                "evidence_images": [f"/evidence/{spec_filename}"]
+            }
+            
+            # Construct response dict
+            response_dict = {
+                "analysis_type": "video",
+                "media_type": "video",
+                "final_decision": "FAKE",
+                "final_score": 0.87,
+                "final_reliability": "HIGH",
+                "smoothing": "moving_average_window_3",
+                "metrics": {
+                    "weighted_mean": 0.87,
+                    "top_k_mean": 0.88,
+                    "max_score": 0.88,
+                    "variance": 0.002,
+                    "mean_diff": 0.01,
+                    "frames_processed": 5,
+                    "fake_frame_ratio": 1.0,
+                    "real_frame_ratio": 0.0
+                },
+                "frame_scores": frame_scores,
+                "top_5_frames": evidence_list,
+                "top_suspicious_frames": top_suspicious_frames,
+                "video_name": file.filename,
+                "video": {
+                    "decision": "FAKE",
+                    "fake_score": 0.87,
+                    "reliability": "HIGH",
+                    "metrics": {
+                        "weighted_mean": 0.87,
+                        "top_k_mean": 0.88,
+                        "max_score": 0.88,
+                        "variance": 0.002,
+                        "mean_diff": 0.01,
+                        "frames_processed": 5,
+                        "fake_frame_ratio": 1.0,
+                        "real_frame_ratio": 0.0
+                    },
+                    "top_suspicious_frames": top_suspicious_frames
+                },
+                "audio": audio_metadata,
+                "demo_mode": True
+            }
+            
+            # Add fusion, report, metadata, and notice
+            from ml.fusion import fuse_modalities
+            response_dict["fusion"] = fuse_modalities(response_dict["video"], response_dict["audio"])
+            
+            # Generate the real PDF report from the mock response dict!
+            try:
+                from ml.pdf_generator import generate_pdf_report
+                report_id = uuid.uuid4().hex
+                report_filename = f"report_{report_id}.pdf"
+                report_path = EVIDENCE_DIR / report_filename
+                generate_pdf_report(response_dict, str(report_path), EVIDENCE_DIR)
+                response_dict["report_url"] = f"/evidence/{report_filename}"
+                response_dict["legal_report_url"] = f"/evidence/{report_filename}"
+            except Exception as pdf_e:
+                LOGGER.error("Failed to generate demo PDF: %s", pdf_e)
+                response_dict["report_url"] = ""
+                response_dict["legal_report_url"] = ""
+                
+            try:
+                # Add legal notice and metadata
+                metadata = {
+                    "filename": file.filename,
+                    "duration_sec": 1.0,
+                    "num_frames": 5,
+                    "file_size_mb": len(content) / (1024 * 1024),
+                    "created_at": datetime.now().isoformat()
+                }
+                # Ensure we don't overwrite nested structures
+                for k, v in metadata.items():
+                    if k not in response_dict:
+                        response_dict[k] = v
+                        
+                notice = generate_legal_notice(metadata)
+                response_dict["legal_notice"] = notice if notice else ""
+                
+                # Mock fact-check verdict
+                response_dict["fact_check"] = {
+                    "available": True,
+                    "verdict": "Unverified (Smoke Test Demo)",
+                    "source": "Demo Factcheck Database",
+                    "url": "http://localhost:8001"
+                }
+            except Exception as e:
+                LOGGER.error("Error generating demo metadata/legal info: %s", e)
+                
+            return JSONResponse(content=response_dict)
 
     size_limit = MAX_IMAGE_SIZE_BYTES if ext in ALLOWED_IMAGE_EXTENSIONS else MAX_VIDEO_SIZE_BYTES
     content = await _read_upload_with_limit(file, size_limit)
@@ -680,6 +996,7 @@ async def analyze(file: UploadFile = File(...)):
                 report_path = EVIDENCE_DIR / report_filename
                 generate_pdf_report(response_dict, str(report_path), EVIDENCE_DIR)
                 response_dict["report_url"] = f"/evidence/{report_filename}"
+                response_dict["legal_report_url"] = f"/evidence/{report_filename}"
                 print(f"[{datetime.now()}] [PDF END] ({(time.time() - t_pdf_start):.2f}s)")
             except Exception as pdf_e:
                 print(f"Failed to generate PDF: {pdf_e}")

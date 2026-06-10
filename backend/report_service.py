@@ -42,8 +42,20 @@ class ReportService:
 
     async def init(self) -> None:
         """Initialize MongoDB connection and GridFS bucket."""
-        mongo_uri = os.getenv("MONGO_URI")
-        db_name = os.getenv("MONGO_DB", "unisys_project")
+        mongo_uri = (
+            os.getenv("MONGO_URI")
+            or os.getenv("MONGODB_URI")
+            or os.getenv("MONGO_URL")
+            or os.getenv("MONGODB_URL")
+            or os.getenv("DATABASE_URL")
+        )
+        db_name = (
+            os.getenv("MONGO_DB")
+            or os.getenv("MONGO_DB_NAME")
+            or os.getenv("DB_NAME")
+            or os.getenv("DATABASE_NAME")
+            or "unisys_project"
+        )
 
         if not mongo_uri:
             raise RuntimeError("MONGO_URI environment variable is required")

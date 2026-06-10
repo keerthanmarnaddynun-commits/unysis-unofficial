@@ -5,7 +5,13 @@ DuckDuckGo search for claim verification.
 No API key required. No rate limits for moderate use.
 """
 
-from config import DDG_MAX_RESULTS
+try:
+    from ml.config import DDG_MAX_RESULTS
+except ImportError:
+    try:
+        from backend.ml.config import DDG_MAX_RESULTS
+    except ImportError:
+        DDG_MAX_RESULTS = 5
 
 
 def _ddgs_available() -> bool:
