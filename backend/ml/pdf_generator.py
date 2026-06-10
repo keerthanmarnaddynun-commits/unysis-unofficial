@@ -245,7 +245,7 @@ def generate_pdf_report(data: Dict[str, Any], output_path: str, evidence_dir: Pa
                 pdf.cell(0, 8, f"Spectrogram Analysis:", 0, 1)
                 import os
                 from pathlib import Path
-                spec_path = str(Path('D:/forsen') / evidence_images[0].lstrip('/'))
+                spec_path = str(evidence_dir / Path(evidence_images[0]).name)
                 if os.path.exists(spec_path):
                     pdf.image(spec_path, x=10, w=150)
                     pdf.ln(60)

@@ -23,6 +23,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import type { SourceInfo } from "./upload-screen"
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8001";
+
 interface AnalysisResultProps {
   onContinue: () => void
   onBack: () => void
@@ -35,7 +37,18 @@ export function AnalysisResult({ onContinue, onBack, sourceInfo, data }: Analysi
   const [showFactCheck, setShowFactCheck] = useState(true)
 
   // Retrieve nested structure or fallback to top level for legacy support
-  const detection = data?.deepfake_detection || {}
+  const detection = data?.deepfake_detection || {
+    label: data?.final_prediction || data?.prediction,
+    confidence: data?.confidence,
+    risk_level: data?.reliability,
+    streams: {
+      spatial_texture: data?.cnn_probability !== undefined ? { fake_prob: data.cnn_probability } : undefined,
+      frequency_domain: data?.fft_probability !== undefined ? { fake_prob: data.fft_probability } : undefined,
+      temporal: null,
+      audio: null,
+      rppg: null
+    }
+  }
   const isFake = detection.label ? detection.label === "Fake" : data?.final_prediction === "Fake"
   const finalLabel = detection.label || data?.final_prediction || "Unknown"
   const rawConfidence = detection.confidence !== undefined ? detection.confidence : data?.confidence
@@ -72,7 +85,7 @@ export function AnalysisResult({ onContinue, onBack, sourceInfo, data }: Analysi
   // Handle PDF Download
   const handleDownloadReport = () => {
     if (legalReportUrl) {
-      const fullUrl = `http://127.0.0.1:8000${legalReportUrl}`
+      const fullUrl = `${API_BASE_URL}${legalReportUrl}`
       window.open(fullUrl, "_blank")
     }
   }
@@ -397,7 +410,7 @@ export function AnalysisResult({ onContinue, onBack, sourceInfo, data }: Analysi
                     )
                   ) : detection.gradcam_url ? (
                     <img 
-                      src={`http://127.0.0.1:8000${detection.gradcam_url}`} 
+                      src={`${API_BASE_URL}${detection.gradcam_url}`} 
                       alt="Grad-CAM Forensic Overlay" 
                       className="w-full h-full object-contain"
                     />

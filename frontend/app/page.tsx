@@ -124,7 +124,7 @@ function MainApp({ initialScreen, initialUrl: propInitialUrl }: { initialScreen?
       )}
 
       {currentScreen === "analysis" && (
-        analysisData?.metrics ? (
+        analysisData?.media_type === "video" ? (
           <VideoAnalysisResult
             data={analysisData}
             sourceInfo={analysisData?.sourceInfo}

@@ -60,7 +60,7 @@ app.add_middleware(
 )
 app.include_router(report_router)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-EVIDENCE_DIR = Path("D:/forsen/video_evidence_frames")
+EVIDENCE_DIR = _REPO_ROOT / "backend" / "video_evidence_frames"
 EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/evidence", StaticFiles(directory=str(EVIDENCE_DIR)), name="evidence")
 
@@ -101,7 +101,7 @@ async def startup_event() -> None:
     from datetime import datetime
     print(f"[{datetime.now()}] [STARTUP BEGIN]")
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    EVIDENCE_DIR = Path("D:/forsen/video_evidence_frames")
+    EVIDENCE_DIR = _REPO_ROOT / "backend" / "video_evidence_frames"
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
     
     # Initialize report service with MongoDB

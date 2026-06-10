@@ -17,7 +17,8 @@ from .audio_ood import detect_ood_and_quality
 from .confidence_calibrator import get_calibrator
 from .audio_reliability import compute_audio_reliability
 
-EVIDENCE_DIR = Path("D:/forsen/video_evidence_frames")
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+EVIDENCE_DIR = _REPO_ROOT / "backend" / "video_evidence_frames"
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
 THRESHOLDS_FILE = CONFIG_DIR / "audio_thresholds.json"
 
@@ -265,6 +266,8 @@ def analyze_audio(wav_path: Path) -> dict:
                 "decision": "LIMITED_AUDIO_EVIDENCE",
                 "fake_score": 0.0,
                 "confidence": "LOW",
+                "audio_reliability": 0,
+                "reliability_level": "LOW",
                 "suspicious_segments": [],
                 "evidence_images": [],
                 "model_name": "Pre-flight Check (1.0)",

@@ -141,7 +141,7 @@ export interface Report {
   } | null;
 }
 
-const BACKEND_BASE_URL = "http://127.0.0.1:8000";
+const BACKEND_BASE_URL = API_BASE_URL;
 
 // Helper to get auth headers
 function getAuthHeaders(): HeadersInit {
@@ -280,7 +280,7 @@ export async function sendTakedownNotice(
     return response.json();
   } catch (error) {
     if (error instanceof TypeError && error.message === "Failed to fetch") {
-      throw new Error("Unable to connect to BharatShield backend. Please ensure the backend server is running on http://127.0.0.1:8000");
+      throw new Error(`Unable to connect to BharatShield backend. Please ensure the backend server is running on ${BACKEND_BASE_URL}`);
     }
     throw error;
   }

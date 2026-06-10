@@ -614,7 +614,7 @@ export function VideoAnalysisResult({ onContinue, onBack, sourceInfo, data }: Vi
                           <div>
                             <h4 className="font-medium flex items-center gap-2">
                               Status: Extracted Successfully
-                              {data.audio.decision === "UNRELIABLE" && (
+                              {(data.audio.decision === "UNRELIABLE" || data.audio.decision === "LIMITED_AUDIO_EVIDENCE") && (
                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full border text-amber-500 border-amber-500/50 bg-amber-500/10 text-[10px] font-semibold">
                                   <AlertCircle className="w-3 h-3 mr-1" />
                                   UNRELIABLE AUDIO
@@ -631,7 +631,7 @@ export function VideoAnalysisResult({ onContinue, onBack, sourceInfo, data }: Vi
                               </p>
                             )}
                           </div>
-                          {data.audio.decision && data.audio.decision !== "NOT_ANALYZED" && data.audio.decision !== "UNRELIABLE" && (
+                          {data.audio.decision && data.audio.decision !== "NOT_ANALYZED" && data.audio.decision !== "UNRELIABLE" && data.audio.decision !== "LIMITED_AUDIO_EVIDENCE" && (
                             <div className="text-right flex flex-col items-end">
                               <p className="text-sm font-medium text-muted-foreground mb-1">Audio Supporting Signal</p>
                               <span className={`inline-flex items-center justify-center rounded-md text-sm font-semibold text-lg py-1 px-3 ${data.audio.decision.includes("SUSPICION") || data.audio.decision.includes("SUSPICIOUS") ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : data.audio.decision === "NO_STRONG_ACOUSTIC_ANOMALY" ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"}`}>
@@ -702,7 +702,7 @@ export function VideoAnalysisResult({ onContinue, onBack, sourceInfo, data }: Vi
                   </div>
                 </div>
 
-                {data?.audio?.available && data?.audio?.decision !== "NOT_ANALYZED" && (
+                {data?.audio?.available && data?.audio?.decision !== "NOT_ANALYZED" && data?.audio?.decision !== "UNRELIABLE" && data?.audio?.decision !== "LIMITED_AUDIO_EVIDENCE" && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Spectrogram Image */}
                     {data.audio.evidence_images && data.audio.evidence_images.length > 0 && (
@@ -710,7 +710,7 @@ export function VideoAnalysisResult({ onContinue, onBack, sourceInfo, data }: Vi
                         <p className="text-sm font-medium mb-3">Spectrogram Analysis</p>
                         <div className="relative aspect-[5/2] w-full rounded overflow-hidden border border-border/50">
                           <img 
-                            src={`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}${data.audio.evidence_images[0]}`} 
+                            src={`${API_BASE_URL}${data.audio.evidence_images[0]}`} 
                             alt="Audio Spectrogram"
                             className="object-cover w-full h-full"
                           />

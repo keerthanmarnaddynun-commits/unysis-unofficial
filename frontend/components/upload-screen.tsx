@@ -173,7 +173,7 @@ export function UploadScreen({ mode, initialUrl = "", onBack, onAnalyze }: Uploa
             originalUrl: originalUrl || undefined,
             verified: false,
             url: fileUrl,
-            localPreviewUrl: URL.createObjectURL(file)
+            localPreviewUrl: fileUrl
           }
         }, file)
 

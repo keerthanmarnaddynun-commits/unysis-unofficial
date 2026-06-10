@@ -24,7 +24,7 @@ def assess_audio_quality(audio_data: dict) -> str:
     - extraction status
     - reliability
     """
-    if not audio_data or not audio_data.get('available', False) or audio_data.get('decision') == 'UNRELIABLE':
+    if not audio_data or not audio_data.get('available', False) or audio_data.get('decision') in ['UNRELIABLE', 'LIMITED_AUDIO_EVIDENCE']:
         return 'UNAVAILABLE'
         
     rel = audio_data.get('audio_reliability', 100)
