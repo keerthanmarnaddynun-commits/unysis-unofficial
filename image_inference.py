@@ -36,6 +36,8 @@ import sys
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 
+VERBOSE = False
+
 BRANCH_THRESHOLD = 0.5
 
 # Suppress prints during imports (e.g. Torch version from train_deepfake_detection.py)
@@ -52,6 +54,7 @@ with open(os.devnull, "w") as f:
             logit_to_fake_prob,
             predict_logit,
             preprocess_image as preprocess_cnn_image,
+            get_mtcnn,
         )
     finally:
         sys.stdout = old_stdout
@@ -72,8 +75,15 @@ DEFAULT_FFT_MODEL = _FFT_DIR / "fft_output" / "best_fft_model.pth"
 DEFAULT_FFT_STATS = _FFT_DIR / "fft_output" / "fft_stats.json"
 DEFAULT_FFT_RUN_CONFIG = _FFT_DIR / "fft_output" / "fft_run_config.json"
 DEFAULT_FUSION_BUNDLE = _FFT_DIR / "fusion_bundle"
-THRESHOLD = 0.15
-
+THRESHOLD = 0.5
+CNN_FAKE_TH = 0.65
+CNN_REAL_TH = 0.59
+FUSION_FAKE_TH = 0.92
+SMALL_IMAGE_SIDE_TH = 350
+SMALL_CROP_W_TH = 160
+SMALL_CROP_H_TH = 160
+SMALL_CROP_FAKE_CROP_CNN_TH = 0.90
+SMALL_CROP_FAKE_NOCROP_CNN_TH = 0.80
 
 @dataclass
 class BranchResult:
@@ -95,7 +105,16 @@ class ImageInferenceResult:
     fusion_threshold: float
     ood_flags: List[str]
     warning: Optional[str] = None
-
+    original_width: Optional[int] = None
+    original_height: Optional[int] = None
+    crop_x: Optional[float] = None
+    crop_y: Optional[float] = None
+    crop_width: Optional[float] = None
+    crop_height: Optional[float] = None
+    face_crop_img: Optional[np.ndarray] = None
+    time_mtcnn: float = 0.0
+    time_cnn: float = 0.0
+    time_fft: float = 0.0
 
 @dataclass
 class FFTPreprocessConfig:
@@ -168,7 +187,9 @@ def run_cnn_branch(
     *,
     face_crop: bool,
     skip_no_face: bool,
-) -> Tuple[Optional[BranchResult], Optional[str], Optional[bool], Optional[np.ndarray]]:
+) -> Tuple[Optional[BranchResult], Optional[str], Optional[bool], Optional[np.ndarray], float, float]:
+    import time
+    t0 = time.time()
     prep = preprocess_cnn_image(
         pil_img,
         device=device,
@@ -176,24 +197,19 @@ def run_cnn_branch(
         skip_no_face=skip_no_face,
         resize_if_not_380=True,
     )
+    t_mtcnn = time.time() - t0
+    
     if prep is None:
-        return None, "No face detected (CNN skipped; use without --skip_no_face to resize full image)", False, None
+        return None, "No face detected (CNN skipped; use without --skip_no_face to resize full image)", False, None, t_mtcnn, 0.0
 
+    t1 = time.time()
     logit = predict_logit(cnn_model, device, prep.image_np, transform)
+    t_cnn = time.time() - t1
     prob = logit_to_fake_prob(logit)
-    return BranchResult(logit=logit, prob_fake=prob, label=_label_from_prob(prob, THRESHOLD)), None, prep.face_detected, prep.image_np
+    return BranchResult(logit=logit, prob_fake=prob, label=_label_from_prob(prob, THRESHOLD)), None, prep.face_detected, prep.image_np, t_mtcnn, t_cnn
 
 
-def jpeg95_normalize_for_fft(face_img: np.ndarray) -> Path:
-    from PIL import Image
-    out_path = Path("debug_fft_runtime_jpg95.jpg")
-    Image.fromarray(face_img).save(
-        out_path,
-        format="JPEG",
-        quality=95,
-        subsampling=0,
-    )
-    return out_path
+
 
 
 def run_fft_branch(
@@ -205,12 +221,13 @@ def run_fft_branch(
     dataset_std: Optional[float],
     radial_mask: Optional[np.ndarray],
 ) -> BranchResult:
-    if isinstance(fft_input, np.ndarray):
-        print("DEBUG FFT input: face_crop")
-    elif isinstance(fft_input, Path) and fft_input.name == "debug_fft_runtime_jpg95.jpg":
-        print("DEBUG FFT input: jpeg95_normalized_crop")
-    else:
-        print("DEBUG FFT input: original_image")
+    if VERBOSE:
+        if isinstance(fft_input, np.ndarray):
+            print("DEBUG FFT input: array-direct")
+        elif isinstance(fft_input, Path) and fft_input.name == "debug_fft_runtime_jpg95.jpg":
+            print("DEBUG FFT input: jpeg95_normalized_crop")
+        else:
+            print("DEBUG FFT input: original_image")
     spectrum = preprocess_fft_image(
         fft_input,
         image_size=fft_cfg.image_size,
@@ -303,6 +320,7 @@ def infer_image(
     radial_mask: Optional[np.ndarray],
     face_crop: bool,
     skip_no_face: bool,
+    force_crop: bool = False,
 ) -> ImageInferenceResult:
     fusion_threshold = THRESHOLD
     ood_flags = []
@@ -317,12 +335,56 @@ def infer_image(
     if width < 128 or height < 128:
         ood_flags.append("low_resolution")
 
-    cnn_result, cnn_warn, face_detected, face_img = run_cnn_branch(
+    actual_face_crop = face_crop
+    if face_crop:
+        mtcnn = get_mtcnn(device)
+        boxes, _probs = mtcnn.detect(pil_img, landmarks=False)
+        img_area = width * height
+        
+        if boxes is not None and len(boxes) > 0:
+            import numpy as np
+            boxes_np = np.asarray(boxes, dtype=np.float32)
+            areas = (boxes_np[:, 2] - boxes_np[:, 0]) * (boxes_np[:, 3] - boxes_np[:, 1])
+            idx = int(np.argmax(areas))
+            box = boxes_np[idx]
+            face_area = float(areas[idx])
+            face_area_ratio = face_area / img_area
+            
+            x1 = max(0.0, float(box[0]))
+            y1 = max(0.0, float(box[1]))
+            x2 = min(float(width), float(box[2]))
+            y2 = min(float(height), float(box[3]))
+            
+            box_x = x1
+            box_y = y1
+            box_w = max(0.0, x2 - x1)
+            box_h = max(0.0, y2 - y1)
+            
+            min_side = min(width, height)
+            if VERBOSE:
+                print(f"DEBUG: Original image size: {width}x{height}")
+                print(f"DEBUG: Face box size: {box_w:.1f}x{box_h:.1f}")
+                print(f"DEBUG: Face area ratio: {face_area_ratio:.3f}")
+                print(f"DEBUG: Min image side: {min_side}")
+            
+            if not force_crop and (face_area_ratio >= 0.20 or min_side <= 400):
+                actual_face_crop = False
+                if VERBOSE:
+                    print("DEBUG: Crop skipped (face already large or image already small)")
+            else:
+                if force_crop:
+                    if VERBOSE:
+                        print("DEBUG: Crop applied (FORCE)")
+                else:
+                    if VERBOSE:
+                        print("DEBUG: Crop applied")
+
+    cnn_result, cnn_warn, face_detected, face_img, t_mtcnn, t_cnn = run_cnn_branch(
         pil_img,
         cnn_model,
         device,
         cnn_transform,
-        face_crop=face_crop,
+        face_crop=actual_face_crop,
         skip_no_face=skip_no_face,
     )
     if cnn_result is None:
@@ -344,10 +406,12 @@ def infer_image(
         radial_mask = None
 
     if face_crop and face_img is not None:
-        fft_input = jpeg95_normalize_for_fft(face_img)
+        fft_input = face_img
     else:
         fft_input = image_path
 
+    import time
+    t_fft_start = time.time()
     fft_result = run_fft_branch(
         fft_input,
         fft_model,
@@ -357,17 +421,19 @@ def infer_image(
         dataset_std,
         radial_mask,
     )
+    t_fft = time.time() - t_fft_start
 
     prob_final = fuse_logistic(bundle, cnn_result.logit, fft_result.logit)
     
-    FFT_ANOMALY_THRESHOLD = 0.8
+    FFT_ANOMALY_THRESHOLD = 0.995
+    label_final = _label_from_prob(prob_final, fusion_threshold)
     fft_override = False
-    if fft_result.prob_fake > FFT_ANOMALY_THRESHOLD and prob_final <= fusion_threshold:
-        prob_final = max(prob_final, fft_result.prob_fake)
-        label_final = "FAKE"
-        fft_override = True
-    else:
-        label_final = _label_from_prob(prob_final, fusion_threshold)
+    # if fft_result.prob_fake > FFT_ANOMALY_THRESHOLD and prob_final <= fusion_threshold:
+    #     prob_final = max(prob_final, fft_result.prob_fake)
+    #     label_final = "FAKE"
+    #     fft_override = True
+    # else:
+    #     label_final = _label_from_prob(prob_final, fusion_threshold)
         
     # Compute confidence based on final prediction
     confidence = prob_final if label_final == "FAKE" else 1 - prob_final
@@ -395,8 +461,17 @@ def infer_image(
         fusion_threshold=fusion_threshold,
         ood_flags=ood_flags,
         warning=cnn_warn,
+        original_width=width,
+        original_height=height,
+        crop_x=box_x if face_crop and face_detected else None,
+        crop_y=box_y if face_crop and face_detected else None,
+        crop_width=box_w if face_crop and face_detected else None,
+        crop_height=box_h if face_crop and face_detected else None,
+        face_crop_img=face_img,
+        time_mtcnn=t_mtcnn,
+        time_cnn=t_cnn,
+        time_fft=t_fft,
     )
-
 
 def print_result(result: ImageInferenceResult) -> None:
     print("----------------------------------------")
@@ -409,6 +484,68 @@ def print_result(result: ImageInferenceResult) -> None:
     print(f"Confidence : {result.confidence:.3f}")
     print(f"Reliability: {result.reliability}")
     print(f"Reason     : {result.reason}")
+    print()
+    print("----------------------------------------")
+
+
+def print_dual_result(res_crop: ImageInferenceResult, res_no_crop: ImageInferenceResult) -> None:
+    print("----------------------------------------")
+    print(f"Image: {res_crop.path.name}")
+    print()
+    print(f"Crop result: CNN {res_crop.cnn.label} ({res_crop.cnn.prob_fake:.3f}), FFT {res_crop.fft.label} ({res_crop.fft.prob_fake:.3f}), Fusion {res_crop.label_final} ({res_crop.prob_final:.3f})")
+    print(f"No-crop result: CNN {res_no_crop.cnn.label} ({res_no_crop.cnn.prob_fake:.3f}), FFT {res_no_crop.fft.label} ({res_no_crop.fft.prob_fake:.3f}), Fusion {res_no_crop.label_final} ({res_no_crop.prob_final:.3f})")
+    
+    crop_cnn = res_crop.cnn.prob_fake
+    crop_fusion = res_crop.prob_final
+    nocrop_cnn = res_no_crop.cnn.prob_fake
+
+    small_crop_case = False
+    ow = res_crop.original_width
+    oh = res_crop.original_height
+
+    if ow is not None and oh is not None:
+        if min(ow, oh) <= 350:
+            small_crop_case = True
+
+    if VERBOSE:
+        print(f"DEBUG: small_crop_case = {small_crop_case}")
+
+    if small_crop_case:
+        if crop_cnn >= 0.90 and nocrop_cnn >= 0.45:
+            final_dec = "FAKE"
+            reliability = "HIGH"
+            reason = "Small-crop guard: strong crop and no-crop CNN fake signal"
+        elif crop_cnn <= 0.59:
+            final_dec = "REAL"
+            reliability = "HIGH"
+            reason = "Small-crop guard: CNN below real threshold"
+        else:
+            final_dec = "UNCERTAIN"
+            reliability = "LOW"
+            reason = "Small-crop guard: possible crop/upscale artifact"
+    else:
+        if crop_cnn >= CNN_FAKE_TH or crop_fusion >= FUSION_FAKE_TH:
+            final_dec = "FAKE"
+            reliability = "HIGH" if crop_cnn >= CNN_FAKE_TH else "MEDIUM"
+            reason = "Tristate: Exceeded FAKE threshold (CNN or Fusion)"
+        elif crop_cnn <= CNN_REAL_TH:
+            final_dec = "REAL"
+            reliability = "HIGH"
+            reason = "Tristate: Below REAL threshold"
+        else:
+            final_dec = "UNCERTAIN"
+            reliability = "LOW"
+            reason = "Tristate: CNN score in ambiguous boundary (0.59-0.65)"
+
+    print(f"Final decision: {final_dec}")
+    print()
+    if final_dec == "UNCERTAIN":
+        print("Reliability: LOW")
+        print(f"Reason     : {reason}")
+    else:
+        # Confidence is not straightforward in tristate, we can just print reliability
+        print(f"Reliability: {reliability}")
+        print(f"Reason     : {reason}")
     print()
     print("----------------------------------------")
 
@@ -442,6 +579,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--fft_stats", type=str, default=str(DEFAULT_FFT_STATS))
     p.add_argument("--fft_run_config", type=str, default=str(DEFAULT_FFT_RUN_CONFIG))
     p.add_argument("--fusion_bundle", type=str, default=str(DEFAULT_FUSION_BUNDLE))
+    p.add_argument("--verbose", action="store_true", help="Enable verbose debug logging")
     p.add_argument(
         "--face_crop",
         action="store_true",
@@ -457,6 +595,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    
+    global VERBOSE
+    VERBOSE = args.verbose
+    
     device = resolve_device(args.device)
     input_path = Path(args.input_path).expanduser().resolve()
 
@@ -494,21 +636,53 @@ def main() -> int:
     n_err = 0
     for img_path in image_paths:
         try:
-            result = infer_image(
-                img_path,
-                cnn_model=cnn_model,
-                fft_model=fft_model,
-                bundle=bundle,
-                device=device,
-                cnn_transform=cnn_transform,
-                fft_cfg=fft_cfg,
-                dataset_mean=dataset_mean,
-                dataset_std=dataset_std,
-                radial_mask=radial_mask,
-                face_crop=args.face_crop,
-                skip_no_face=args.skip_no_face,
-            )
-            print_result(result)
+            if args.face_crop:
+                res_crop = infer_image(
+                    img_path,
+                    cnn_model=cnn_model,
+                    fft_model=fft_model,
+                    bundle=bundle,
+                    device=device,
+                    cnn_transform=cnn_transform,
+                    fft_cfg=fft_cfg,
+                    dataset_mean=dataset_mean,
+                    dataset_std=dataset_std,
+                    radial_mask=radial_mask,
+                    face_crop=True,
+                    skip_no_face=args.skip_no_face,
+                    force_crop=True,
+                )
+                res_no_crop = infer_image(
+                    img_path,
+                    cnn_model=cnn_model,
+                    fft_model=fft_model,
+                    bundle=bundle,
+                    device=device,
+                    cnn_transform=cnn_transform,
+                    fft_cfg=fft_cfg,
+                    dataset_mean=dataset_mean,
+                    dataset_std=dataset_std,
+                    radial_mask=radial_mask,
+                    face_crop=False,
+                    skip_no_face=False,
+                )
+                print_dual_result(res_crop, res_no_crop)
+            else:
+                result = infer_image(
+                    img_path,
+                    cnn_model=cnn_model,
+                    fft_model=fft_model,
+                    bundle=bundle,
+                    device=device,
+                    cnn_transform=cnn_transform,
+                    fft_cfg=fft_cfg,
+                    dataset_mean=dataset_mean,
+                    dataset_std=dataset_std,
+                    radial_mask=radial_mask,
+                    face_crop=False,
+                    skip_no_face=args.skip_no_face,
+                )
+                print_result(result)
             print()
             n_ok += 1
         except Exception as exc:

@@ -158,3 +158,36 @@ fft/fft_env/
 fft/fft_output/
 training_output/
 .model_cache/
+intermediate files/
+intermediate txt files/
+DeepfakeBench/
+SRM dataset/
+MesoNet/
+mesonet_saved_model/
+
+Local test files/
+
+Local backend diagnostics/
+
+Local reports and outputs/
+
+aasist_final_run/
+aasist_full_training/
+aasist_full_training_ep15_safe/
+aasist_full_training_workers2_ep15/
+aasist_manifest_test/
+aasist_official/
+aasist_official_finetune/
+aasist_official_finetune_run/
+
+AASIST_RUNTIME_DEPENDENCY_REPORT.txt
+VIDEO_UPLOAD_RUNTIME_DEPENDENCY_TRACE.txt
+Local diagnostic scripts/
+analysis/
+milestones/
+synthetic_detector_experiment/
+temp_real_frames/
+video_evidence_frames/
+train_aasist_official_finetune.py
+*.mp4
+*.zip

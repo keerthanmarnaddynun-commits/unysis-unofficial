@@ -1,5 +1,9 @@
 
 {
   "python.defaultInterpreterPath": "D:/envs/gpu_env/python.exe",
-  "python.terminal.activateEnvironment": true
+  "python.terminal.activateEnvironment": true,
+  "antigravity.agent.enabled": true,
+  "antigravity.agent.executePolicy": "auto",
+  "antigravity.security.autoApproveCommands": true
+  
 }

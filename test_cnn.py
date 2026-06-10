@@ -313,7 +313,6 @@ def predict_logit(
     return float(avg_logit)
 
 
-
 def logit_to_fake_prob(logit: float, invert_output: bool = False) -> float:
     prob = 1.0 / (1.0 + np.exp(-logit))
     return float(1.0 - prob) if invert_output else float(prob)

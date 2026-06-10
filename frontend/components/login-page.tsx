@@ -50,7 +50,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     if (identifier.trim()) {
       setIsLoading(true)
       try {
-        const res = await fetch("http://localhost:8000/verify-login", {
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8001";
+        const res = await fetch(`${API_BASE_URL}/verify-login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role, identifier: identifier.trim() })
