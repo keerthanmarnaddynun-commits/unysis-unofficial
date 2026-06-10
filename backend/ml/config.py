@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-
+import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +19,12 @@ MAX_IMAGE_SIZE_MB = int(os.getenv("BHARATSHIELD_MAX_IMAGE_SIZE_MB", "20"))
 MAX_VIDEO_SIZE_MB = int(os.getenv("BHARATSHIELD_MAX_VIDEO_SIZE_MB", "500"))
 VIDEO_SAMPLE_FRAMES = int(os.getenv("BHARATSHIELD_VIDEO_SAMPLE_FRAMES", "16"))
 VIDEO_MAX_FRAMES_TO_SCAN = int(os.getenv("BHARATSHIELD_VIDEO_MAX_FRAMES_TO_SCAN", "300"))
+WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "base")
+NEWSAPI_KEY = os.getenv("NEWSAPI_KEY", "")
+NEWS_DAYS_BACK = int(os.getenv("NEWS_DAYS_BACK", "30"))
+NEWS_MAX_ARTICLES = int(os.getenv("NEWS_MAX_ARTICLES", "5"))
+DDG_MAX_RESULTS = int(os.getenv("DDG_MAX_RESULTS", "5"))
+HARM_THRESHOLD = float(os.getenv("HARM_THRESHOLD", "0.6"))
 
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v"}

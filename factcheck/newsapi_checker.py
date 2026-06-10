@@ -10,7 +10,15 @@ import os
 import requests
 from datetime import datetime, timedelta
 
-from config import NEWSAPI_KEY, NEWS_DAYS_BACK, NEWS_MAX_ARTICLES
+try:
+    from ml.config import NEWSAPI_KEY, NEWS_DAYS_BACK, NEWS_MAX_ARTICLES
+except ImportError:
+    try:
+        from backend.ml.config import NEWSAPI_KEY, NEWS_DAYS_BACK, NEWS_MAX_ARTICLES
+    except ImportError:
+        NEWSAPI_KEY = ""
+        NEWS_DAYS_BACK = 30
+        NEWS_MAX_ARTICLES = 5
 
 
 class NewsAPIChecker:
