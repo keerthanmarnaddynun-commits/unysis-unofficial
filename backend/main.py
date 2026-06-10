@@ -24,12 +24,16 @@ from ml.config import (
     UPLOAD_DIR,
     setup_logging,
 )
-
+from factcheck.pipeline import run_factcheck_pipeline
 from utils.legal import generate_legal_notice
 from utils.metadata import create_metadata
 from pymongo import MongoClient
 import certifi
 from pydantic import BaseModel
+
+from report_service import ReportService
+from report_routes import router as report_router, set_report_service, set_img_models
+from auth import create_access_token
 
 
 from dotenv import load_dotenv
@@ -41,18 +45,27 @@ setup_logging()
 LOGGER = logging.getLogger(__name__)
 
 app = FastAPI(title="BharatShield Backend", version="1.0.0")
-# Enable CORS for local development
+# Enable CORS for local development - include both localhost and 127.0.0.1 variants
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:4000",  # VibeStream platform port
+        "http://127.0.0.1:4000",  # VibeStream platform port
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(report_router)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 EVIDENCE_DIR = Path("D:/forsen/video_evidence_frames")
 EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/evidence", StaticFiles(directory=str(EVIDENCE_DIR)), name="evidence")
+
+# Report service singleton
+_report_service = ReportService()
 
 MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024
 MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024
@@ -84,13 +97,27 @@ def _write_temp_file(content: bytes, suffix: str) -> str:
 IMG_MODELS = {}
 
 @app.on_event("startup")
-def startup_event() -> None:
+async def startup_event() -> None:
     from datetime import datetime
     print(f"[{datetime.now()}] [STARTUP BEGIN]")
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     EVIDENCE_DIR = Path("D:/forsen/video_evidence_frames")
     EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Initialize report service with MongoDB
+    try:
+        await _report_service.init()
+        set_report_service(_report_service)
+        set_img_models(IMG_MODELS)
+        LOGGER.info("Report service initialized successfully")
+    except Exception as exc:
+        LOGGER.warning("Report service init failed (reports disabled): %s", exc)
+
     print(f"[{datetime.now()}] [STARTUP END]")
+
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    await _report_service.close()
 
 def get_img_models():
     global IMG_MODELS
@@ -164,8 +191,18 @@ async def verify_login(request: LoginRequest):
         })
         
         if doc:
+            # Create JWT token
+            access_token = create_access_token(data={
+                "role": doc.get("role"),
+                "identifier": doc.get("official_id"),
+                "name": doc.get("name"),
+                "organization": doc.get("organization")
+            })
+            
             return {
                 "valid": True,
+                "access_token": access_token,
+                "token_type": "bearer",
                 "user": {
                     "role": doc.get("role"),
                     "official_id": doc.get("official_id"),
@@ -254,6 +291,10 @@ async def analyze(file: UploadFile = File(...)):
                 # Fusion branch
                 "fusion_prediction": str(getattr(res, "label_final", "")).capitalize(),
                 "fusion_probability": float(getattr(res, "prob_final", 0.0)),
+                "fact_check": {
+                    "available": False,
+                    "note": "Fact-checking is not available for image files."
+                }
             })
         else:
             import cv2
@@ -290,6 +331,7 @@ async def analyze(file: UploadFile = File(...)):
                     count += 1
                 cap.release()
                 return f_paths
+
 
             import time
             from ml.audio_extractor import extract_audio
@@ -641,6 +683,25 @@ async def analyze(file: UploadFile = File(...)):
                 print(f"[{datetime.now()}] [PDF END] ({(time.time() - t_pdf_start):.2f}s)")
             except Exception as pdf_e:
                 print(f"Failed to generate PDF: {pdf_e}")
+
+            try:
+                metadata = create_metadata(tmp_path, final_decision, final_score)
+                # Ensure we don't overwrite the nested video/audio keys if create_metadata has overlapping old keys
+                for k, v in metadata.items():
+                    if k not in response_dict:
+                        response_dict[k] = v
+                
+                notice = generate_legal_notice(metadata)
+                response_dict["legal_notice"] = notice if notice else ""
+                
+                try:
+                    factcheck_res = run_factcheck_pipeline(tmp_path, media_type="video")
+                    response_dict["fact_check"] = factcheck_res
+                except Exception as e:
+                    LOGGER.exception("Fact-check pipeline failed: %s", e)
+                    response_dict["fact_check"] = {"available": False, "warnings": [str(e)]}
+            except Exception as e:
+                LOGGER.error(f"Error generating metadata/legal info: {e}")
 
             return JSONResponse(content=response_dict)
     except HTTPException:

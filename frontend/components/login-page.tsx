@@ -13,25 +13,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export type Role = "Citizen" | "Journalist" | "Police" | "Authority"
 
 interface LoginPageProps {
-  onLogin: (role: Role, user: any) => void
+  onLogin: (role: Role, identifier: string, name: string, organization: string, accessToken: string) => void
+  onResourcesClick?: () => void
 }
 
-export function getStoredUser() {
-  if (typeof window === "undefined") return null
-  const stored = localStorage.getItem("bharatshield_user")
-  if (!stored) return null
-  try {
-    return JSON.parse(stored)
-  } catch {
-    return null
-  }
-}
-
-export function LoginPage({ onLogin }: LoginPageProps) {
+export function LoginPage({ onLogin, onResourcesClick }: LoginPageProps) {
   const [role, setRole] = useState<Role>("Citizen")
   const [identifier, setIdentifier] = useState("")
   const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [loading, setLoading] = useState(false)
 
   const getPlaceholder = (selectedRole: Role) => {
     switch (selectedRole) {
@@ -45,47 +35,79 @@ export function LoginPage({ onLogin }: LoginPageProps) {
 
   const handleContinue = async (e: FormEvent) => {
     e.preventDefault()
-    setError(null)
+    if (!identifier.trim()) return
 
-    if (identifier.trim()) {
-      setIsLoading(true)
-      try {
-        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8001";
-        const res = await fetch(`${API_BASE_URL}/verify-login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role, identifier: identifier.trim() })
-        })
-        
-        if (!res.ok) {
-          throw new Error("Server error during verification")
-        }
-        
-        const data = await res.json()
-        if (data.valid) {
-          onLogin(role, data.user)
-        } else {
-          setError(data.message || "Invalid ID for selected role.")
-        }
-      } catch (err) {
-        setError("Failed to verify login. Please try again.")
-      } finally {
-        setIsLoading(false)
+    setLoading(true)
+    setError(null)
+    try {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8001";
+      const res = await fetch(`${API_BASE_URL}/verify-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role, identifier: identifier.trim() }),
+      })
+      if (!res.ok) {
+        throw new Error(`Authentication server returned error: ${res.status}`)
       }
+      const data = await res.json()
+      if (data.valid && data.user) {
+        onLogin(
+          role,
+          data.user.official_id || identifier,
+          data.user.name || "Verified User",
+          data.user.organization || "Independent",
+          data.access_token
+        )
+      } else {
+        setError(data.message || "Invalid identification code for the selected role.")
+      }
+    } catch (err: any) {
+      console.error(err)
+      setError("Failed to connect to authentication server. Please check your network or backend logs.")
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md border-border/50 bg-card/50 backdrop-blur-sm shadow-xl">
-        <CardHeader className="space-y-4 items-center text-center pb-8">
-          <div className="p-3 bg-primary/10 rounded-2xl w-fit">
-            <Shield className="w-10 h-10 text-primary" />
+    <div className="min-h-screen flex flex-col bg-background">
+      {/* Header for unauthenticated state */}
+      <header className="border-b border-border px-6 py-4 bg-background/50 backdrop-blur-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <Shield className="w-6 h-6 text-primary" />
+            </div>
+            <span className="text-xl font-semibold tracking-tight text-white">BharatShield</span>
           </div>
-          <div className="space-y-2">
-            <CardTitle className="text-2xl font-bold tracking-tight">
-              Welcome to BharatShield
-            </CardTitle>
+          
+          {/* Nav Items */}
+          <div className="flex items-center gap-6">
+            <nav className="hidden md:flex items-center gap-6">
+              <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">About</a>
+              <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">How it Works</a>
+              {onResourcesClick ? (
+                <button onClick={onResourcesClick} className="text-sm text-muted-foreground hover:text-foreground transition-colors">Resources</button>
+              ) : (
+                <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Resources</a>
+              )}
+            </nav>
+          </div>
+        </div>
+      </header>
+
+      {/* Login Form */}
+      <div className="flex-1 flex flex-col items-center justify-center p-4">
+        <Card className="w-full max-w-md border-border/50 bg-card/50 backdrop-blur-sm shadow-xl">
+          <CardHeader className="space-y-4 items-center text-center pb-8">
+            <div className="p-3 bg-primary/10 rounded-2xl w-fit">
+              <Shield className="w-10 h-10 text-primary" />
+            </div>
+            <div className="space-y-2">
+              <CardTitle className="text-2xl font-bold tracking-tight">
+                Welcome to BharatShield
+              </CardTitle>
             <CardDescription className="text-base text-muted-foreground">
               Secure access for verified users
             </CardDescription>
@@ -121,19 +143,22 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             </div>
 
             {error && (
-              <p className="text-sm text-destructive font-medium">{error}</p>
+              <div className="p-3 bg-destructive/10 border border-destructive/25 text-destructive rounded-lg text-sm">
+                {error}
+              </div>
             )}
 
-            <Button type="submit" className="w-full text-base py-5 mt-4" disabled={isLoading}>
-              {isLoading ? "Verifying..." : "Continue"}
+            <Button type="submit" className="w-full text-base py-5 mt-4" disabled={loading}>
+              {loading ? "Verifying ID..." : "Continue"}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground pt-4">
-              Role verification will be implemented in future version
+              Access is restricted to authorized credentials
             </p>
           </form>
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }

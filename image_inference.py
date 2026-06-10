@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import mps_patch
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -120,7 +121,7 @@ class ImageInferenceResult:
 class FFTPreprocessConfig:
     image_size: int = 224
     channel_mode: str = "ycbcr_y"
-    norm_mode: str = "dataset"
+    norm_mode: str = "sample"
     radial_emphasis: bool = True
     radial_emphasis_sigma: float = 0.3
     stats_file: Path = DEFAULT_FFT_STATS
@@ -129,7 +130,11 @@ class FFTPreprocessConfig:
 def resolve_device(device_str: Optional[str]) -> torch.device:
     if device_str:
         return torch.device(device_str)
-    return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        return torch.device("cuda:0")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
 
 
 def load_fft_run_config(path: Path) -> FFTPreprocessConfig:
@@ -138,7 +143,7 @@ def load_fft_run_config(path: Path) -> FFTPreprocessConfig:
         return cfg
     with path.open(encoding="utf-8") as f:
         raw = json.load(f)
-    stats = raw.get("stats_file", str(DEFAULT_FFT_STATS))
+    stats = raw.get("stats_file", str(DEFAULT_FFT_STATS)).replace("\\", "/")
     stats_path = Path(stats)
     if not stats_path.is_absolute():
         stats_path = (_FFT_DIR / stats_path).resolve()

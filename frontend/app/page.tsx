@@ -8,19 +8,29 @@ import { AnalysisResult } from "@/components/analysis-result"
 import { VideoAnalysisResult } from "@/components/video-analysis-result"
 import { RoleBasedOutput } from "@/components/role-based-output"
 import { ActionConfirmation } from "@/components/action-confirmation"
-import { LoginPage, type Role, getStoredUser } from "@/components/login-page"
+import { LoginPage, type Role } from "@/components/login-page"
+import { AuthorityDashboard } from "@/components/authority-dashboard"
+import { MetricsDashboard } from "@/components/metrics-dashboard"
 import HowItWorksPage from "./how-it-works/page"
+import { MyReports } from "@/components/my-reports"
+import { ResourcesPage } from "@/components/resources-page"
 
-type Screen = "landing" | "upload-file" | "upload-url" | "analysis" | "role-output" | "confirmation" | "how-it-works"
+type Screen = "landing" | "upload-file" | "upload-url" | "analysis" | "role-output" | "confirmation" | "how-it-works" | "authority-dashboard" | "metrics-dashboard" | "my-reports" | "resources"
 
-function MainApp() {
+function MainApp({ initialScreen, initialUrl: propInitialUrl }: { initialScreen?: Screen; initialUrl?: string }) {
   const searchParams = useSearchParams()
-  const sourceUrl = searchParams.get("sourceUrl")
+  const sourceUrl = searchParams.get("sourceUrl") || propInitialUrl
 
-  const [currentScreen, setCurrentScreen] = useState<Screen>("landing")
+  const [currentScreen, setCurrentScreen] = useState<Screen>(initialScreen || "landing")
   const [userRole, setUserRole] = useState<Role | null>(null)
+  const [userIdentifier, setUserIdentifier] = useState("")
+  const [userName, setUserName] = useState("")
+  const [userOrganization, setUserOrganization] = useState("")
+  const [accessToken, setAccessToken] = useState("")
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [initialUrl, setInitialUrl] = useState("")
   const [analysisData, setAnalysisData] = useState<any>(null)
+  const [submittedReportInfo, setSubmittedReportInfo] = useState<any>(null)
 
   useEffect(() => {
     if (sourceUrl) {
@@ -35,36 +45,41 @@ function MainApp() {
     }
   }, [sourceUrl])
 
-  useEffect(() => {
-    const user = getStoredUser()
-
-    if (user && user.role) {
-      setUserRole(user.role as Role)
-    }
-  }, [])
-
-  const handleLogin = (role: Role, user: any) => {
-    const userToSave = { ...user, role }
-
-    localStorage.setItem(
-      "bharatshield_user",
-      JSON.stringify(userToSave)
-    )
-
+  const handleLogin = (role: Role, identifier: string, name: string, organization: string, token: string) => {
     setUserRole(role)
+    setUserIdentifier(identifier)
+    setUserName(name)
+    setUserOrganization(organization)
+    setAccessToken(token)
+    // Store token in localStorage for persistence
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('access_token', token)
+    }
   }
 
   const navigateTo = (screen: Screen) => {
     setCurrentScreen(screen)
   }
 
-  const handleDemo = () => {
-    // Skip to analysis screen for demo
-    setCurrentScreen("analysis")
+
+  const handleLogout = () => {
+    setUserRole(null)
+    setUserIdentifier("")
+    setUserName("")
+    setUserOrganization("")
+    setAccessToken("")
+    setUploadedFile(null)
+    setAnalysisData(null)
+    setSubmittedReportInfo(null)
+    setCurrentScreen("landing")
+    // Clear token from localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('access_token')
+    }
   }
 
   if (!userRole) {
-    return <LoginPage onLogin={handleLogin} />
+    return <LoginPage onLogin={handleLogin} onResourcesClick={() => navigateTo("resources")} />
   }
 
   return (
@@ -74,8 +89,12 @@ function MainApp() {
           userRole={userRole}
           onUploadClick={() => navigateTo("upload-file")}
           onUrlClick={() => navigateTo("upload-url")}
-          onDemoClick={handleDemo}
           onHowItWorksClick={() => navigateTo("how-it-works")}
+          onResourcesClick={() => navigateTo("resources")}
+          onViewDashboardClick={() => navigateTo("authority-dashboard")}
+          onViewMetricsClick={() => navigateTo("metrics-dashboard")}
+          onViewMyReportsClick={() => navigateTo("my-reports")}
+          onLogout={handleLogout}
         />
       )}
 
@@ -83,8 +102,9 @@ function MainApp() {
         <UploadScreen
           mode="file"
           onBack={() => navigateTo("landing")}
-          onAnalyze={(result) => {
+          onAnalyze={(result, file) => {
             setAnalysisData(result)
+            setUploadedFile(file)
             navigateTo("analysis")
           }}
         />
@@ -95,8 +115,9 @@ function MainApp() {
           mode="url"
           initialUrl={initialUrl}
           onBack={() => navigateTo("landing")}
-          onAnalyze={(result) => {
+          onAnalyze={(result, file) => {
             setAnalysisData(result)
+            setUploadedFile(file)
             navigateTo("analysis")
           }}
         />
@@ -139,13 +160,29 @@ function MainApp() {
       {currentScreen === "role-output" && userRole && (
         <RoleBasedOutput
           userRole={userRole}
-          onAction={() => navigateTo("confirmation")}
+          sourceUrl={initialUrl}
+          userIdentifier={userIdentifier}
+          userName={userName}
+          userOrganization={userOrganization}
+          analysisData={analysisData}
+          uploadedFile={uploadedFile}
+          onAction={(reportInfo) => {
+            setSubmittedReportInfo(reportInfo)
+            // For Authority users, navigate to authority dashboard
+            if (userRole === "Authority") {
+              navigateTo("authority-dashboard")
+            } else {
+              navigateTo("confirmation")
+            }
+          }}
           onBack={() => navigateTo("analysis")}
         />
       )}
 
       {currentScreen === "confirmation" && (
         <ActionConfirmation
+          userRole={userRole || "Citizen"}
+          reportInfo={submittedReportInfo}
           onStartOver={() => navigateTo("landing")}
         />
       )}
@@ -153,11 +190,41 @@ function MainApp() {
       {currentScreen === "how-it-works" && (
         <HowItWorksPage onBack={() => navigateTo("landing")} />
       )}
+
+      {currentScreen === "authority-dashboard" && (
+        <AuthorityDashboard
+          userRole={userRole}
+          userIdentifier={userIdentifier}
+          userName={userName}
+          userOrganization={userOrganization}
+          onBack={() => navigateTo("landing")}
+        />
+      )}
+
+      {currentScreen === "metrics-dashboard" && (
+        <MetricsDashboard
+          userRole={userRole || "Citizen"}
+          onBack={() => navigateTo("landing")}
+        />
+      )}
+
+      {currentScreen === "my-reports" && userRole && (
+        <MyReports
+          userRole={userRole}
+          userIdentifier={userIdentifier}
+          userName={userName}
+          onBack={() => navigateTo("landing")}
+        />
+      )}
+
+      {currentScreen === "resources" && (
+        <ResourcesPage onBack={() => navigateTo("landing")} />
+      )}
     </div>
   )
 }
 
-export default function Home() {
+export default function Home({ initialScreen, initialUrl }: { initialScreen?: any; initialUrl?: string }) {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
@@ -166,7 +233,7 @@ export default function Home() {
         </div>
       </div>
     }>
-      <MainApp />
+      <MainApp initialScreen={initialScreen} initialUrl={initialUrl} />
     </Suspense>
   )
 }

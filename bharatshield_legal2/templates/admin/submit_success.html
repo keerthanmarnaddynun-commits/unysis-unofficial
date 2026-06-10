@@ -1,0 +1,37 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}Case created — Admin{% endblock %}
+{% block content %}
+<h1 class="page-title">Case submitted successfully</h1>
+<div class="alert show alert-success" style="margin-bottom:24px;">
+  Legal packet for <strong>{{ target_name }}</strong> was generated. You can review it in the admin dashboard when ready.
+</div>
+
+<div class="card">
+  <h2>Reference</h2>
+  <dl class="meta-grid">
+    <div class="meta-item"><dt>Packet ID</dt><dd><code>{{ packet_id }}</code></dd></div>
+    <div class="meta-item"><dt>Report ID</dt><dd><code>{{ report_id }}</code></dd></div>
+  </dl>
+</div>
+
+{% if documents %}
+<div class="card" style="margin-top:20px;">
+  <h2>Generated legal documents (PDF)</h2>
+  <ul class="doc-list">
+    {% for doc in documents %}
+    <li>
+      <a href="/files/{{ packet_id }}/{{ doc.filename }}" target="_blank" rel="noopener">
+        {{ doc.label }}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="action-row" style="margin-top:28px;">
+  <a class="btn btn-success" href="/admin/reports/{{ report_id }}">Open full report</a>
+  <a class="btn" href="/admin/new-case">Create another case</a>
+  <a class="btn btn-secondary" href="/admin">Dashboard</a>
+</div>
+{% endblock %}

@@ -1,4 +1,5 @@
-# app.py
+# Deprecated Flask backend removed – FastAPI (backend/main.py) provides all endpoints.
+
 
 import logging
 import os
